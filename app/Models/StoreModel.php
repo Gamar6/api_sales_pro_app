@@ -17,5 +17,6 @@ class StoreModel extends Model
         'latitude',
         'longitude',
         'area',
+        'status'
     ];
 }
