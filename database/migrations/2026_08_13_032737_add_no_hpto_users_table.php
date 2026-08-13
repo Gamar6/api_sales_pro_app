@@ -11,15 +11,18 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('stores', function (Blueprint $table) {
-            // Sesuaikan tipe data dengan kebutuhan, contoh: string atau boolean
-            $table->string('status')->after('area'); 
+        Schema::table('users', function (Blueprint $table) {
+            $table->string('nohp')->after('password');
         });
     }
 
+    /**
+     * Reverse the migrations.
+     */
     public function down(): void
     {
-        Schema::table('stores', function (Blueprint $table) {
-            $table->dropColumn('status');
+        Schema::table('users', function (Blueprint $table) {
+            $table->dropColumn('nohp');
         });
-}};
+    }
+};

@@ -1,11 +1,9 @@
 <?php
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\AuthController;
 use App\Http\Controllers\StoreController;
+use Illuminate\Support\Facades\Route;
 
-Route::get('/user', function (Request $request) {
-    return $request->user();
-})->middleware('auth:sanctum');
-
-Route::get('/nearby-stores', [StoreController::class, 'getNearbyStores']);
+Route::post('/login', [AuthController::class, 'login']);
+Route::get('/stores', [StoreController::class, 'getNearbyStores']);
+Route::post('/stores/claim', [StoreController::class, 'claimStore']);

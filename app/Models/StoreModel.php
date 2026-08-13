@@ -17,6 +17,10 @@ class StoreModel extends Model
         'latitude',
         'longitude',
         'area',
-        'status'
     ];
+
+    public function assignments()
+    {
+        return $this->hasMany(StoreAssignment::class, 'store_id');
+    }
 }
