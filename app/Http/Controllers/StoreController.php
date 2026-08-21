@@ -30,7 +30,7 @@ class StoreController extends Controller
         }
 
         // 1. Tarik data toko dari Odoo via Service
-        $odooStores = $this->odooService->getStores(100); // Ambil 100 data toko
+        $odooStores = $this->odooService->getStores(); // Ambil semua data toko
 
         if (empty($odooStores)) {
             return response()->json([

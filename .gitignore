@@ -25,3 +25,8 @@ _ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
+/python_engine/aplikasi/config.py
+/python_engine/.env
+/python_engine/database/master/
+/python_engine/database/processed/
+/python_engine/database/raw/

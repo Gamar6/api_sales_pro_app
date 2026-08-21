@@ -5,6 +5,7 @@ namespace App\Services;
 use PhpXmlRpc\Client;
 use PhpXmlRpc\Value;
 use PhpXmlRpc\Request;
+use Illuminate\Support\Facades\Log;
 
 class OdooService
 {
@@ -618,5 +619,59 @@ class OdooService
         }
 
         return $encoder->decode($resQuant->value()) ?? [];
+    }
+
+    public function execute_kw(string $model, string $method, array $args = [], array $kwargs = [])
+    {
+        if (!$this->uid && !$this->authenticate()) {
+            return [];
+        }
+
+        $client = new Client($this->url . '/xmlrpc/2/object');
+        $encoder = new \PhpXmlRpc\Encoder();
+
+        $params = [
+            $encoder->encode($this->db),
+            $encoder->encode($this->uid),
+            $encoder->encode($this->password),
+            $encoder->encode($model),
+            $encoder->encode($method),
+            $encoder->encode($args),
+        ];
+
+        if (!empty($kwargs)) {
+            $params[] = $encoder->encode($kwargs);
+        }
+
+        $req = new Request('execute_kw', $params);
+        $response = $client->send($req);
+
+        if ($response->faultCode()) {
+            Log::error("Odoo XML-RPC Error [{$model}@{$method}]: " . $response->faultString());
+            return [];
+        }
+
+        return $encoder->decode($response->value()) ?? [];
+    }
+
+    public function getCompleteStoreData(array $storeIds): array
+    {
+        if (empty($storeIds)) {
+            return [];
+        }
+
+        $domain = [
+            ['id', 'in', array_values($storeIds)]
+        ];
+
+        $kwargs = [
+            'fields' => [
+                'id', 'name', 'display_name', 'street', 'street2', 
+                'city', 'state_id', 'country_id', 'phone', 'mobile', 'email', 'vat'
+            ]
+        ];
+
+        // Cukup panggil helper executeKw() yang sudah pakai Encoder bawaan PhpXmlRpc
+        return $this->execute_kw('res.partner', 'search_read', [$domain], $kwargs) ?? [];
     }
 }
