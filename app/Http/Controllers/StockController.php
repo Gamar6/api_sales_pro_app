@@ -15,20 +15,24 @@ class StockController extends Controller
         $this->odoo = $odoo;
     }
 
-    public function index(Request $request)
+public function index(Request $request)
     {
         $search = $request->query('search', '');
         $rawProducts = $this->odoo->getProductsWithStock(50, $search);
 
-        // Transformasi data Odoo ke format UI Flutter
+        // 1. Filter produk agar yang stoknya <= 0 dibuang/dilewati
+        $filteredProducts = array_filter($rawProducts, function ($item) {
+            $qty = (int) ($item['free_qty'] ?? 0);
+            return $qty > 0; // Hanya ambil yang stoknya di atas 0
+        });
+
+        // 2. Transformasi data Odoo ke format UI Flutter
         $products = array_map(function ($item) {
             $qty = (int) ($item['free_qty'] ?? 0);
             $unit = is_array($item['uom_name']) ? $item['uom_name'][1] : ($item['uom_name'] ?? 'pcs');
 
-            // Tentukan status stok
-            if ($qty <= 0) {
-                $status = 'Out of Stock';
-            } elseif ($qty < 10) {
+            // Karena yang <= 0 sudah dibuang, status tinggal Low Stock atau In Stock
+            if ($qty < 10) {
                 $status = 'Low Stock';
             } else {
                 $status = 'In Stock';
@@ -42,14 +46,17 @@ class StockController extends Controller
                 'raw_qty' => $qty,
                 'unit' => strtolower($unit),
                 'status' => $status,
-                'imageUrl' => null, // Bisa diisi URL gambar jika ada di Odoo
+                'imageUrl' => null,
             ];
-        }, $rawProducts);
+        }, $filteredProducts); // <-- Perhatikan: menggunakan $filteredProducts
+
+        // Penting: gunakan array_values() agar format JSON array kembali rapi dari index 0
+        $products = array_values($products);
 
         return response()->json([
             'status' => 'success',
             'total_skus' => count($products),
-            'low_stock_count' => count(array_filter($products, fn($p) => $p['raw_qty'] < 10 && $p['raw_qty'] > 0)),
+            'low_stock_count' => count(array_filter($products, fn($p) => $p['raw_qty'] < 10)),
             'data' => $products
         ]);
     }
