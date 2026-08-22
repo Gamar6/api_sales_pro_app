@@ -4,15 +4,15 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\StoreAssignment;
-use App\Services\OdooService;
+use App\Services\Odoo\OdooStoreService;
 
 class StoreController extends Controller
 {
-    protected OdooService $odooService;
+    protected OdooStoreService $odooStoreService;
 
-    public function __construct(OdooService $odooService)
+    public function __construct(OdooStoreService $odooStoreService)
     {
-        $this->odooService = $odooService;
+        $this->odooStoreService = $odooStoreService;
     }
 
     // 1. Ambil daftar toko terdekat + filter area + status klaim
@@ -30,7 +30,7 @@ class StoreController extends Controller
         }
 
         // 1. Tarik data toko dari Odoo via Service
-        $odooStores = $this->odooService->getStores(); // Ambil semua data toko
+        $odooStores = $this->odooStoreService->getStores(); // Ambil semua data toko
 
         if (empty($odooStores)) {
             return response()->json([

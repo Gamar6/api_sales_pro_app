@@ -3,14 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Services\OdooService;
+use App\Services\Odoo\OdooProductService;
 use Illuminate\Http\Request;
 
 class StockController extends Controller
 {
     protected $odoo;
 
-    public function __construct(OdooService $odoo)
+    public function __construct(OdooProductService $odoo)
     {
         $this->odoo = $odoo;
     }
