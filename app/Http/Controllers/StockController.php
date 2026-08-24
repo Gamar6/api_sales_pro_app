@@ -15,48 +15,36 @@ class StockController extends Controller
         $this->odoo = $odoo;
     }
 
-public function index(Request $request)
+    public function index(Request $request)
     {
-        $search = $request->query('search', '');
-        $rawProducts = $this->odoo->getProductsWithStock(50, $search);
+        $companyId = 1; // Dikunci khusus Company 1
 
-        // 1. Filter produk agar yang stoknya <= 0 dibuang/dilewati
-        $filteredProducts = array_filter($rawProducts, function ($item) {
-            $qty = (int) ($item['free_qty'] ?? 0);
-            return $qty > 0; // Hanya ambil yang stoknya di atas 0
-        });
+        // 1. Ambil semua produk yang pernah dijual di Company 1 beserta stoknya
+        $rawProducts = $this->odoo->getSoldProductsWithStock($companyId);
 
-        // 2. Transformasi data Odoo ke format UI Flutter
+        // 2. Format status berdasarkan jumlah stok
         $products = array_map(function ($item) {
-            $qty = (int) ($item['free_qty'] ?? 0);
-            $unit = is_array($item['uom_name']) ? $item['uom_name'][1] : ($item['uom_name'] ?? 'pcs');
+            $qty = $item['raw_qty'];
+            $item['level'] = number_format($qty, 0, ',', '.');
 
-            // Karena yang <= 0 sudah dibuang, status tinggal Low Stock atau In Stock
-            if ($qty < 10) {
-                $status = 'Low Stock';
+            if ($qty <= 0) {
+                $item['status'] = 'Out of Stock';
+            } elseif ($qty < 10) {
+                $item['status'] = 'Low Stock';
             } else {
-                $status = 'In Stock';
+                $item['status'] = 'In Stock';
             }
+            return $item;
+        }, $rawProducts);
 
-            return [
-                'id' => $item['id'],
-                'title' => $item['display_name'],
-                'subtitle' => ($item['default_code'] ? '[' . $item['default_code'] . '] ' : '') . 'Rp ' . number_format($item['lst_price'] ?? 0, 0, ',', '.'),
-                'level' => number_format($qty, 0, ',', '.'),
-                'raw_qty' => $qty,
-                'unit' => strtolower($unit),
-                'status' => $status,
-                'imageUrl' => null,
-            ];
-        }, $filteredProducts); // <-- Perhatikan: menggunakan $filteredProducts
-
-        // Penting: gunakan array_values() agar format JSON array kembali rapi dari index 0
-        $products = array_values($products);
+        // 3. Hitung summary statistik
+        $totalSkus = count($products);
+        $lowStockCount = count(array_filter($products, fn($p) => $p['status'] === 'Low Stock' || $p['status'] === 'Out of Stock'));
 
         return response()->json([
             'status' => 'success',
-            'total_skus' => count($products),
-            'low_stock_count' => count(array_filter($products, fn($p) => $p['raw_qty'] < 10)),
+            'total_skus' => $totalSkus,
+            'low_stock_count' => $lowStockCount,
             'data' => $products
         ]);
     }

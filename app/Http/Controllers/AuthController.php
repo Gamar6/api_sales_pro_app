@@ -25,7 +25,6 @@ class AuthController extends Controller
             ], 401);
         }
 
-        // Jika menggunakan Laravel Sanctum untuk Token Authentication:
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([

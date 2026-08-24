@@ -81,25 +81,73 @@ class OdooProductService
     /**
      * Ambil produk terjual dan stoknya khusus Perusahaan/CV tertentu
      */
-    public function getActiveSoldProductsForCV(int $companyId = 1, int $limit = 10): array
+    public function getSoldProductsWithStock(int $companyId = 1, int $limit = 500): array
     {
-        $productIds = $this->getSoldProductIds($limit * 3);
+        // 1. Cari semua baris penjualan resmi (sale/done) di Company 1
+        $soldLines = $this->client->executeKw('sale.order.line', 'search_read', [
+            [
+                ['company_id', '=', $companyId],
+                ['state', 'in', ['sale', 'done']]
+            ]
+        ], [
+            'fields' => ['product_id'],
+            'limit' => $limit * 5,
+        ]);
 
-        if (empty($productIds)) {
+        // 2. Buat Master List produk yang pernah dijual & BER-FILTER [PRODUK JADI]
+        $productMap = [];
+        foreach ($soldLines as $line) {
+            if (isset($line['product_id'][0])) {
+                $id = $line['product_id'][0];
+                $name = $line['product_id'][1] ?? 'Produk Tanpa Nama';
+
+                // FILTER KETAT: Hanya ambil produk yang judulnya mengandung '[PRODUK JADI]'
+                if (!str_contains($name, '[PRODUK JADI]')) {
+                    continue;
+                }
+                
+                if (!isset($productMap[$id])) {
+                    $productMap[$id] = [
+                        'id' => $id,
+                        'title' => $name,
+                        'subtitle' => 'Lokasi: CV. Fiva Food Meat & Supply',
+                        'raw_qty' => 0, //default 0 if out of stock
+                        'unit' => 'pcs',
+                        'imageUrl' => null,
+                    ];
+                }
+            }
+        }
+
+        if (empty($productMap)) {
             return [];
         }
 
+        $productIds = array_keys($productMap);
+
+        // 3. Ambil stok aktual dari stock.quant hanya untuk ID produk yang lolos filter
         $domainQuant = [
             ['product_id', 'in', $productIds],
+            ['location_id.usage', '=', 'internal'],
             ['company_id', '=', $companyId],
         ];
 
-        $kwargsQuant = [
-            'fields' => ['product_id', 'location_id', 'quantity', 'reserved_quantity', 'available_quantity'],
-            'limit'  => $limit,
-        ];
+        $quants = $this->client->executeKw('stock.quant', 'search_read', [$domainQuant], [
+            'fields' => ['product_id', 'quantity', 'available_quantity'],
+        ]);
 
-        return $this->client->executeKw('stock.quant', 'search_read', [$domainQuant], $kwargsQuant);
+        // 4. Akumulasikan stok dari quants ke master list produk
+        foreach ($quants as $quant) {
+            if (isset($quant['product_id'][0])) {
+                $pId = $quant['product_id'][0];
+                if (isset($productMap[$pId])) {
+                    $qty = (int) ($quant['available_quantity'] ?? $quant['quantity'] ?? 0);
+                    $productMap[$pId]['raw_qty'] += $qty;
+                }
+            }
+        }
+
+        return array_values($productMap);
     }
 
     /**
