@@ -3,111 +3,104 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use App\Models\StoreModel;
 use App\Models\StoreAssignment;
-use App\Services\Odoo\OdooStoreService;
+use App\Helpers\GeoHelper;
+use Illuminate\Support\Facades\Validator;
 
 class StoreController extends Controller
 {
-    protected OdooStoreService $odooStoreService;
-
-    public function __construct(OdooStoreService $odooStoreService)
-    {
-        $this->odooStoreService = $odooStoreService;
-    }
-
     // 1. Ambil daftar toko terdekat + filter area + status klaim
     public function getNearbyStores(Request $request)
     {
-        $userLat = (float) $request->input('latitude');
-        $userLng = (float) $request->input('longitude');
-        $areaFilter = $request->input('area');
+        $validator = Validator::make($request->all(), [
+            'latitude'  => 'nullable|numeric|between:-90,90',
+            'longitude' => 'nullable|numeric|between:-180,180',
+            'area'      => 'nullable|string',
+        ]);
 
-        if (!$userLat || !$userLng) {
+        if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Koordinat latitude dan longitude wajib diisi.'
-            ], 400);
+                'message' => 'Validasi gagal.',
+                'errors' => $validator->errors()
+            ], 422);
         }
 
-        // 1. Tarik data toko dari Odoo via Service
-        $odooStores = $this->odooStoreService->getStores(); // Ambil semua data toko
+        // Ambil data yang sudah tervalidasi
+        $userLat = $request->filled('latitude') ? (float) $request->input('latitude') : null;
+        $userLng = $request->filled('longitude') ? (float) $request->input('longitude') : null;
+        $areaFilter = $request->input('area');
 
-        if (empty($odooStores)) {
-            return response()->json([
-                'success' => true,
-                'data' => []
-            ]);
-        }
-
-        // 2. Ambil ID semua toko dari Odoo untuk cek klaim lokal secara sekaligus (mencegah N+1 query)
-        $storeIds = array_column($odooStores, 'id');
-        $activeClaims = StoreAssignment::with('user')
-            ->whereIn('store_id', $storeIds)
-            ->whereIn('status', ['claimed', 'onprogress'])
-            ->get()
-            ->keyBy('store_id');
-
-        // 3. Olah data toko (Hitung Haversine + Mapping + Filtering)
-        $formattedStores = collect($odooStores)
-            ->filter(function ($store) use ($areaFilter) {
-                // Filter area (berdasarkan kota) jika diisi
-                if ($areaFilter && strtolower($store['city'] ?? '') !== strtolower($areaFilter)) {
-                    return false;
-                }
-                return true;
+        // Ambil toko dari MySQL beserta relasi activeClaim
+        $stores = StoreModel::with(['activeClaim.user'])
+            ->when($areaFilter, function ($query, $area) {
+                return $query->whereRaw('LOWER(city) = ?', [strtolower($area)]);
             })
-            ->map(function ($store) use ($userLat, $userLng, $activeClaims) {
-                $storeLat = (float) ($store['partner_latitude'] ?? 0);
-                $storeLng = (float) ($store['partner_longitude'] ?? 0);
+            ->get()
+            ->map(function ($store) use ($userLat, $userLng) {
+                $storeLat = (float) $store->latitude;
+                $storeLng = (float) $store->longitude;
 
-                // Hitung Jarak Haversine
-                $distanceInKm = ($storeLat != 0 && $storeLng != 0) 
-                    ? $this->calculateHaversineDistance($userLat, $userLng, $storeLat, $storeLng)
-                    : 999999; // Default jika koordinat toko tidak ada di Odoo
+                // Default nilai jika koordinat user atau toko tidak valid
+                $distanceInKm = null;
+                $distanceLabel = '-';
 
-                // Format Label Jarak
-                if ($distanceInKm < 1) {
-                    $distanceLabel = round($distanceInKm * 1000) . ' m away';
-                } else {
-                    $distanceLabel = round($distanceInKm, 1) . ' km away';
+                // Hitung Haversine HANYA jika koordinat user DAN koordinat toko tersedia
+                if ($userLat !== null && $userLng !== null && $storeLat != 0 && $storeLng != 0) {
+                    $distanceInKm = GeoHelper::calculateHaversineDistance($userLat, $userLng, $storeLat, $storeLng);
+                    $distanceLabel = GeoHelper::formatDistanceLabel($distanceInKm);
+                    
+                    // Lakukan pembulatan jarak jika tipenya angka
+                    $distanceInKm = round($distanceInKm, 2);
                 }
 
-                // Cek status klaim dari database lokal
-                $storeId = $store['id'];
-                $activeClaim = $activeClaims->get($storeId);
+                $activeClaim = $store->activeClaim;
 
                 return [
-                    'id' => $storeId,
-                    'name' => $store['name'] ?? $store['display_name'],
-                    'address' => $store['street'] ?? '',
-                    'area' => $store['city'] ?? '',
-                    'latitude' => $storeLat,
-                    'longitude' => $storeLng,
-                    'distance' => round($distanceInKm, 2),
-                    'distance_label' => $distanceLabel,
-                    'is_claimed' => $activeClaim ? true : false,
-                    'claimed_by_name' => $activeClaim ? $activeClaim->user->name : null,
-                    'status' => $activeClaim ? $activeClaim->status : 'available',
+                    'id'                => $store->odoo_id,
+                    'name'              => $store->name,
+                    'address'           => $store->address ?? '',
+                    'area'              => $store->city ?? '',
+                    'phone'             => $store->phone,
+                    'sales_name'        => $store->sales_name,
+                    'latitude'          => $storeLat,
+                    'longitude'         => $storeLng,
+                    'distance'          => $distanceInKm, // Menghasilkan float atau null
+                    'distance_label'    => $distanceLabel, // Menghasilkan string (misal: "1.2 km" atau "-")
+                    'retensi_status'    => $store->retensi_status,
+                    'avg_retensi_weeks' => $store->avg_retensi_weeks,
+                    'total_sales'       => (float) $store->total_sales,
+                    'priority'          => $store->priority,
+                    'is_claimed'        => (bool) $activeClaim,
+                    'claimed_by_name'   => $activeClaim?->user?->name,
+                    'status'            => $activeClaim?->status ?? 'available',
                 ];
-            })
-            ->sortBy('distance') // Urutkan toko dari yang terdekat
-            ->values();
+            });
+
+        // HANYA lakukan sorting berdasarkan jarak jika user mengirimkan koordinatnya
+        if ($userLat !== null && $userLng !== null) {
+            $stores = $stores->sortBy('distance');
+        } else {
+            // Jika tanpa koordinat, urutkan berdasarkan priority atau ID toko sebagai fallback
+            $stores = $stores->sortByDesc('priority');
+        }
 
         return response()->json([
             'success' => true,
-            'data' => $formattedStores
+            'data'    => $stores->values()->all() // Pastikan index array di-reset
         ]);
     }
 
-    // 2. Fungsi untuk Klaim Toko
+    // 2. Klaim Toko
     public function claimStore(Request $request)
     {
         $request->validate([
-            'store_id' => 'required|integer', // Menggunakan integer karena ID merujuk ke res.partner Odoo
+            'store_id' => 'required|integer', // Referensi odoo_id
             'sales_id' => 'required|exists:users,id',
         ]);
 
-        // Cek apakah toko sedang diklaim/dikunjungi sales lain
+        // Cek ketersediaan klaim
         $isAlreadyClaimed = StoreAssignment::where('store_id', $request->store_id)
             ->whereIn('status', ['claimed', 'onprogress'])
             ->exists();
@@ -119,35 +112,17 @@ class StoreController extends Controller
             ], 400);
         }
 
-        // Simpan klaim baru di DB lokal (store_id diisi ID Odoo)
         $assignment = StoreAssignment::create([
-            'store_id' => $request->store_id,
+            'store_id'   => $request->store_id,
             'claimed_by' => $request->sales_id,
-            'status' => 'claimed',
+            'status'     => 'claimed',
             'claimed_at' => now(),
         ]);
 
         return response()->json([
             'success' => true,
             'message' => 'Toko berhasil diklaim',
-            'data' => $assignment
+            'data'    => $assignment
         ]);
-    }
-
-    // Helper: Algoritma Haversine untuk kalkulasi jarak koordinat dalam kilometer
-    private function calculateHaversineDistance(float $lat1, float $lon1, float $lat2, float $lon2): float
-    {
-        $earthRadius = 6371; // Jari-jari bumi dalam KM
-
-        $dLat = deg2rad($lat2 - $lat1);
-        $dLon = deg2rad($lon2 - $lon1);
-
-        $a = sin($dLat / 2) * sin($dLat / 2) +
-             cos(deg2rad($lat1)) * cos(deg2rad($lat2)) *
-             sin($dLon / 2) * sin($dLon / 2);
-
-        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
-
-        return $earthRadius * $c;
     }
 }

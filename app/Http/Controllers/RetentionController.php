@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\StoreVisit;
 use App\Services\OdooService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
@@ -33,7 +34,7 @@ class RetentionController extends Controller
             return response()->json(['status' => 'success', 'data' => []]);
         }
 
-        // 3. Kumpulkan semua partner_id unik dari Excel (dipastikan bertipe integer)
+        // 3. Kumpulkan semua partner_id unik dari Excel
         $partnerIds = $excelData->pluck('partner_id')
             ->filter()
             ->map(fn ($id) => (int) $id)
@@ -48,17 +49,25 @@ class RetentionController extends Controller
             'fields' => ['id', 'street', 'partner_latitude', 'partner_longitude', 'email']
         ]);
 
-        // Key-by 'id' agar pencarian O(1) di dalam loop
         $odooStores = collect($odooStoresRaw)->keyBy('id');
 
-        // 5. Gabungkan Data Excel + Data XML-RPC Odoo
-        $processedData = $excelData->map(function (array $row) use ($odooStores) {
+        // 5. Ambil data Klaim/Kunjungan Toko Hari Ini dari DB MySQL Lokal
+        $currentUserId = $request->user() ? $request->user()->id : null;
+        
+        $todayVisits = StoreVisit::with('sales')
+            ->whereIn('odoo_partner_id', $partnerIds)
+            ->whereDate('visit_date', today())
+            ->get()
+            ->keyBy('odoo_partner_id');
+
+        // 6. Gabungkan Data Excel + Odoo + MySQL Store Visits
+        $processedData = $excelData->map(function (array $row) use ($odooStores, $todayVisits, $currentUserId) {
             $partnerId = (int) ($row['partner_id'] ?? 0);
             
-            // $storeDetail berupa Array hasil decode XML-RPC
             $storeDetail = $odooStores->get($partnerId);
+            $activeVisit = $todayVisits->get($partnerId);
 
-            // Handle format tanggal jika berupa object DateTimeImmutable dari FastExcel
+            // Format tanggal order terakhir
             $lastOrderDate = null;
             if (!empty($row['last_order_date'])) {
                 if ($row['last_order_date'] instanceof DateTimeInterface) {
@@ -68,8 +77,19 @@ class RetentionController extends Controller
                 }
             }
 
+            // Konstruksi informasi klaim toko
+            $claimInfo = [
+                'status'          => $activeVisit ? $activeVisit->status : 'AVAILABLE',
+                'store_visit_id'  => $activeVisit ? $activeVisit->id : null,
+                'claimed_by_id'   => $activeVisit ? $activeVisit->sales_id : null,
+                'claimed_by_name' => $activeVisit && $activeVisit->sales ? $activeVisit->sales->name : null,
+                'is_current_user' => $activeVisit && $currentUserId ? ($activeVisit->sales_id === $currentUserId) : false,
+                'check_in_at'     => $activeVisit && $activeVisit->check_in_at ? $activeVisit->check_in_at->toDateTimeString() : null,
+                'check_out_at'    => $activeVisit && $activeVisit->check_out_at ? $activeVisit->check_out_at->toDateTimeString() : null,
+            ];
+
             return [
-                // --- Data Metrik Retensi (dari Excel Python) ---
+                // --- Data Metrik Retensi (Excel) ---
                 'partner_id'        => $partnerId,
                 'partner_name'      => (string) ($row['partner_name'] ?? ''),
                 'kota'              => (string) ($row['kota'] ?? ''),
@@ -85,7 +105,7 @@ class RetentionController extends Controller
                 'total_sales'       => (float) ($row['total_sales_2024_plus'] ?? 0),
                 'priority'          => (int) ($row['priority'] ?? 99),
 
-                // --- Data Lokasi & Kontak (dari XML-RPC Odoo) ---
+                // --- Data Lokasi & Kontak (Odoo XML-RPC) ---
                 'alamat'            => $storeDetail['street'] ?? null,
                 'latitude'          => isset($storeDetail['partner_latitude']) && $storeDetail['partner_latitude'] !== false
                                         ? (float) $storeDetail['partner_latitude'] 
@@ -94,6 +114,9 @@ class RetentionController extends Controller
                                         ? (float) $storeDetail['partner_longitude'] 
                                         : null,
                 'email'             => $storeDetail['email'] ?? null,
+
+                // --- Status Klaim & Kunjungan (MySQL Lokal) ---
+                'claim_info'        => $claimInfo,
             ];
         });
 
