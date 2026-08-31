@@ -11,7 +11,7 @@ return new class extends Migration
         Schema::create('store_retention_histories', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('odoo_id');
-            $table->date('snapshot_date'); // Tanggal eksekusi snapshot (misal: 2026-08-26)
+            $table->date('snapshot_date');
             
             // Data Perubahan Retensi
             $table->date('last_order_date')->nullable();
@@ -26,10 +26,9 @@ return new class extends Migration
 
             $table->timestamps();
 
-            // Foreign Key ke tabel master stores
+            
             $table->foreign('odoo_id')->references('odoo_id')->on('stores')->onDelete('cascade');
             
-            // Unique composite agar cron job di hari yang sama tidak menduplikasi snapshot
             $table->unique(['odoo_id', 'snapshot_date']);
         });
     }

@@ -36,7 +36,6 @@ class SyncOdooStoresCommand extends Command
             return Command::SUCCESS;
         }
 
-        // 2. Ambil baris terakhir tiap partner_id (Deduplikasi 406 baris Excel -> 343 Toko Unik)
         $uniqueExcelStores = $excelData->filter(fn($row) => !empty($row['partner_id']))
             ->keyBy('partner_id');
 
@@ -55,7 +54,6 @@ class SyncOdooStoresCommand extends Command
         $records = $uniqueExcelStores->map(function ($row, $partnerId) use ($odooStores) {
             $storeDetail = $odooStores->get($partnerId);
 
-            // Formatting Tanggal Order
             $lastOrderDate = null;
             if (!empty($row['last_order_date'])) {
                 $lastOrderDate = ($row['last_order_date'] instanceof DateTimeInterface)
@@ -63,7 +61,6 @@ class SyncOdooStoresCommand extends Command
                     : substr((string) $row['last_order_date'], 0, 10);
             }
 
-            // Latitude & Longitude dari Odoo
             $lat = (isset($storeDetail['partner_latitude']) && $storeDetail['partner_latitude'] !== false)
                 ? (float) $storeDetail['partner_latitude'] : null;
             $lng = (isset($storeDetail['partner_longitude']) && $storeDetail['partner_longitude'] !== false)
@@ -94,10 +91,9 @@ class SyncOdooStoresCommand extends Command
             ];
         })->values()->toArray();
 
-        // 4. Batch Upsert ke MySQL
         StoreModel::upsert(
             $records,
-            ['odoo_id'], // unique key
+            ['odoo_id'], 
             [
                 'name', 'address', 'city', 'phone', 'email', 'sales_name',
                 'latitude', 'longitude', 'last_order_date', 'days_since',

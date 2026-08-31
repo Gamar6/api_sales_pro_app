@@ -10,7 +10,6 @@ use Illuminate\Support\Facades\Validator;
 
 class StoreController extends Controller
 {
-    // 1. Ambil daftar toko terdekat + filter area + status klaim
     public function getNearbyStores(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -27,12 +26,10 @@ class StoreController extends Controller
             ], 422);
         }
 
-        // Ambil data yang sudah tervalidasi
         $userLat = $request->filled('latitude') ? (float) $request->input('latitude') : null;
         $userLng = $request->filled('longitude') ? (float) $request->input('longitude') : null;
         $areaFilter = $request->input('area');
 
-        // Ambil toko dari MySQL beserta relasi activeClaim
         $stores = StoreModel::with(['activeClaim.user'])
             ->when($areaFilter, function ($query, $area) {
                 return $query->whereRaw('LOWER(city) = ?', [strtolower($area)]);
@@ -42,16 +39,13 @@ class StoreController extends Controller
                 $storeLat = (float) $store->latitude;
                 $storeLng = (float) $store->longitude;
 
-                // Default nilai jika koordinat user atau toko tidak valid
                 $distanceInKm = null;
                 $distanceLabel = '-';
 
-                // Hitung Haversine HANYA jika koordinat user DAN koordinat toko tersedia
                 if ($userLat !== null && $userLng !== null && $storeLat != 0 && $storeLng != 0) {
                     $distanceInKm = GeoHelper::calculateHaversineDistance($userLat, $userLng, $storeLat, $storeLng);
                     $distanceLabel = GeoHelper::formatDistanceLabel($distanceInKm);
                     
-                    // Lakukan pembulatan jarak jika tipenya angka
                     $distanceInKm = round($distanceInKm, 2);
                 }
 
@@ -66,8 +60,8 @@ class StoreController extends Controller
                     'sales_name'        => $store->sales_name,
                     'latitude'          => $storeLat,
                     'longitude'         => $storeLng,
-                    'distance'          => $distanceInKm, // Menghasilkan float atau null
-                    'distance_label'    => $distanceLabel, // Menghasilkan string (misal: "1.2 km" atau "-")
+                    'distance'          => $distanceInKm, 
+                    'distance_label'    => $distanceLabel, 
                     'retensi_status'    => $store->retensi_status,
                     'avg_retensi_weeks' => $store->avg_retensi_weeks,
                     'total_sales'       => (float) $store->total_sales,
@@ -78,29 +72,25 @@ class StoreController extends Controller
                 ];
             });
 
-        // HANYA lakukan sorting berdasarkan jarak jika user mengirimkan koordinatnya
         if ($userLat !== null && $userLng !== null) {
             $stores = $stores->sortBy('distance');
         } else {
-            // Jika tanpa koordinat, urutkan berdasarkan priority atau ID toko sebagai fallback
             $stores = $stores->sortByDesc('priority');
         }
 
         return response()->json([
             'success' => true,
-            'data'    => $stores->values()->all() // Pastikan index array di-reset
+            'data'    => $stores->values()->all() 
         ]);
     }
 
-    // 2. Klaim Toko
     public function claimStore(Request $request)
     {
         $request->validate([
-            'store_id' => 'required|integer', // Referensi odoo_id
+            'store_id' => 'required|integer',
             'sales_id' => 'required|exists:users,id',
         ]);
 
-        // Cek ketersediaan klaim
         $isAlreadyClaimed = StoreAssignment::where('store_id', $request->store_id)
             ->whereIn('status', ['claimed', 'onprogress'])
             ->exists();

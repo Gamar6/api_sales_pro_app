@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\OdooPartner;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
@@ -28,27 +29,23 @@ class StoreVisit extends Model
         'check_out_at'    => 'datetime',
     ];
 
-    /**
-     * Relasi ke Sales (User Laravel)
-     */
     public function sales(): BelongsTo
     {
         return $this->belongsTo(User::class, 'sales_id');
     }
 
-    /**
-     * Relasi 1-to-1 ke Laporan Kunjungan
-     */
     public function report(): HasOne
     {
         return $this->hasOne(VisitReport::class, 'store_visit_id');
     }
 
-    /**
-     * Scope helper untuk memfilter klaim aktif hari ini
-     */
     public function scopeToday($query)
     {
         return $query->whereDate('visit_date', today());
+    }
+    
+    public function partner(): BelongsTo
+    {
+        return $this->belongsTo(OdooPartner::class, 'odoo_partner_id', 'id');
     }
 }

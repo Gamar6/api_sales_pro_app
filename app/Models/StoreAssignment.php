@@ -26,19 +26,16 @@ class StoreAssignment extends Model
         'completed_at' => 'datetime',
     ];
 
-    // Relasi balik ke Toko
     public function store()
     {
         return $this->belongsTo(StoreModel::class, 'store_id');
     }
 
-    // Relasi balik ke Sales (User)
     public function user()
     {
         return $this->belongsTo(User::class, 'claimed_by');
     }
 
-    // Relasi 1-to-1 ke VisitLog
     public function visitLog()
     {
         return $this->hasOne(VisitLog::class, 'assignment_id');

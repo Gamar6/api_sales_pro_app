@@ -20,16 +20,12 @@ class ReadRetentionExcelController extends Controller
             ], 404);
         }
 
-        // Ambil file paling baru (berdasarkan nama tanggal YYYY-MM-DD)
         rsort($files);
         $latestFile = $files[0];
 
-        // 1. Baca file Excel menggunakan FastExcel
         $rawRows = (new FastExcel)->import($latestFile);
 
-        // 2. Pemrosesan & Pembersihan Data oleh Laravel
         $processedData = $rawRows->map(function (array $row) {
-            // Tipe hint `array $row` di atas menyelesaikan error Intelephense P1006
             return [
                 'partner_id'        => (int) ($row['partner_id'] ?? 0),
                 'partner_name'      => (string) ($row['partner_name'] ?? ''),
@@ -49,7 +45,6 @@ class ReadRetentionExcelController extends Controller
             ];
         });
 
-        // 3. Opsional: Fitur Filter dari Query Parameter API
         if ($request->has('status')) {
             $statusFilter = strtoupper($request->query('status'));
             $processedData = $processedData->where('retensi_status', $statusFilter)->values();

@@ -5,7 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Laravel\Sanctum\HasApiTokens; // Gunakan jika memakai Laravel Sanctum
+use Laravel\Sanctum\HasApiTokens; 
 
 class User extends Authenticatable
 {
@@ -29,7 +29,6 @@ class User extends Authenticatable
         'password' => 'hashed',
     ];
 
-    // Relasi: 1 Sales bisa memiliki banyak klaim toko
     public function storeAssignments()
     {
         return $this->hasMany(StoreAssignment::class, 'claimed_by');

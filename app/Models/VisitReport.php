@@ -28,9 +28,6 @@ class VisitReport extends Model
         'photos'           => 'array',
     ];
 
-    /**
-     * Relasi balik ke Kunjungan Toko
-     */
     public function visit(): BelongsTo
     {
         return $this->belongsTo(StoreVisit::class, 'store_visit_id');

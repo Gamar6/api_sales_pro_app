@@ -11,12 +11,10 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\Request;
 use Exception;
+use App\Services\Odoo\OdooClient;
 
 class StoreVisitController extends Controller
 {
-    /**
-     * Aksi 1: Sales Klaim Toko untuk Mulai Kunjungan
-     */
     public function claim(ClaimStoreRequest $request)
     {
         $salesId = $request->user()->id;
@@ -24,7 +22,6 @@ class StoreVisitController extends Controller
         $today = today()->toDateString();
 
         return DB::transaction(function () use ($salesId, $partnerId, $today) {
-            // Gunakan lockForUpdate untuk mencegah 2 sales menekan tombol bersamaan (Race Condition)
             $existingVisit = StoreVisit::with('sales')
                 ->where('odoo_partner_id', $partnerId)
                 ->whereDate('visit_date', $today)
@@ -48,7 +45,6 @@ class StoreVisitController extends Controller
                 }
             }
 
-            // Buat record klaim baru
             $visit = StoreVisit::create([
                 'odoo_partner_id' => $partnerId,
                 'sales_id'        => $salesId,
@@ -68,9 +64,6 @@ class StoreVisitController extends Controller
         });
     }
 
-    /**
-     * Aksi 2: Submit Form Laporan Kunjungan (Check-out)
-     */
     public function submitReport(SubmitVisitReportRequest $request, $visitId)
     {
         $salesId = $request->user()->id;
@@ -95,7 +88,6 @@ class StoreVisitController extends Controller
 
         DB::beginTransaction();
         try {
-            // Upload foto dokumentasi ke folder storage public
             $photoPaths = [];
             if ($request->hasFile('photos')) {
                 foreach ($request->file('photos') as $photo) {
@@ -104,7 +96,6 @@ class StoreVisitController extends Controller
                 }
             }
 
-            // Simpan isian laporan
             VisitReport::create([
                 'store_visit_id'   => $visit->id,
                 'pic_name'         => $request->pic_name,
@@ -115,7 +106,6 @@ class StoreVisitController extends Controller
                 'photos'           => $photoPaths,
             ]);
 
-            // Ubah status klaim toko menjadi COMPLETED
             $visit->update([
                 'status'       => 'COMPLETED',
                 'check_out_at' => now(),
@@ -142,30 +132,102 @@ class StoreVisitController extends Controller
     }
 
     public function getActiveVisit(Request $request)
-{
-    $user = $request->user();
+    {
+        $user = $request->user();
 
-    $activeVisit = StoreVisit::where('sales_id', $user->id)
-        ->where('status', 'IN_VISIT')
-        ->latest('check_in_at')
-        ->first();
+        $activeVisit = StoreVisit::where('sales_id', $user->id)
+            ->where('status', 'IN_VISIT')
+            ->latest('check_in_at')
+            ->first();
 
-    if (!$activeVisit) {
+        if (!$activeVisit) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Tidak ada kunjungan aktif',
+                'data' => null
+            ], 200);
+        }
+
         return response()->json([
             'success' => true,
-            'message' => 'Tidak ada kunjungan aktif',
-            'data' => null
+            'message' => 'Kunjungan aktif ditemukan',
+            'data' => [
+                'visit_id'        => $activeVisit->id,
+                'odoo_partner_id' => $activeVisit->odoo_partner_id,
+                'status'          => $activeVisit->status,
+            ]
         ], 200);
     }
 
-    return response()->json([
-        'success' => true,
-        'message' => 'Kunjungan aktif ditemukan',
-        'data' => [
-            'visit_id'        => $activeVisit->id, // Pastikan ini ada!
-            'odoo_partner_id' => $activeVisit->odoo_partner_id,
-            'status'          => $activeVisit->status,
-        ]
-    ], 200);
-}
+        protected OdooClient $odooClient;
+
+        // Inject OdooClient lewat constructor
+        public function __construct(OdooClient $odooClient)
+        {
+            $this->odooClient = $odooClient;
+        }
+
+        public function history(Request $request)
+    {
+        $salesId = $request->user()->id;
+
+        // STEP 1: Ambil data riwayat kunjungan & laporan dari MySQL (Database Utama)
+        $visits = StoreVisit::with(['report'])
+            ->where('sales_id', $salesId)
+            ->orderBy('visit_date', 'desc')
+            ->orderBy('check_in_at', 'desc')
+            ->get();
+
+        // STEP 2: Kumpulkan semua odoo_partner_id dari MySQL (pastikan di-cast ke Integer)
+        $partnerIds = $visits->pluck('odoo_partner_id')
+            ->filter()
+            ->map(fn($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->toArray();
+
+        // STEP 3: Cari detail nama & alamat toko ke Odoo (via XML-RPC)
+        $partnersMap = collect();
+
+        if (!empty($partnerIds)) {
+            $odooPartners = $this->odooClient->executeKw(
+                'res.partner',
+                'search_read',
+                [[['id', 'in', $partnerIds]]],                 // Filter domain berdasarkan ID
+                ['fields' => ['id', 'name', 'street', 'city']] // Ambil kolom nama & alamat saja
+            );
+
+            // Jika Odoo mengembalikan data, kelompokkan key berdasarkan ID partner
+            if (is_array($odooPartners)) {
+                $partnersMap = collect($odooPartners)->keyBy('id');
+            }
+        }
+
+        // STEP 4: Gabungkan data MySQL + data Odoo menjadi 1 objek JSON untuk Flutter
+        $data = $visits->map(function ($visit) use ($partnersMap) {
+            $partnerId = (int) $visit->odoo_partner_id;
+            $partner = $partnersMap->get($partnerId);
+
+            return [
+                'id'           => $visit->id,
+                'sales_id'     => $visit->sales_id,
+                'visit_date'   => $visit->visit_date,
+                'status'       => $visit->status,
+                'check_in_at'  => $visit->check_in_at,
+                'check_out_at' => $visit->check_out_at,
+                'report'       => $visit->report,
+                'partner'      => [
+                    // Ambil 'name' dari Odoo. Jika Odoo gagal/kosong, baru fallback ke ID
+                    'name'   => $partner['name'] ?? ('Toko #' . $visit->odoo_partner_id),
+                    'street' => $partner['street'] ?? '-',
+                    'city'   => $partner['city'] ?? '-',
+                ],
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data'    => $data
+        ], 200);
+    }
 }

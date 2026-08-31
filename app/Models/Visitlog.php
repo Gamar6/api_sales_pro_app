@@ -17,7 +17,6 @@ class VisitLog extends Model
         'notes',
     ];
 
-    // Relasi balik ke StoreAssignment
     public function assignment()
     {
         return $this->belongsTo(StoreAssignment::class, 'assignment_id');

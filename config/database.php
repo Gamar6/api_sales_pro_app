@@ -64,6 +64,20 @@ return [
             ]) : [],
         ],
 
+        'odoo' => [
+            'driver' => 'pgsql',
+            'host' => env('DB_HOST_ODOO', '127.0.0.1'),
+            'port' => env('DB_PORT_ODOO', '5432'),
+            'database' => env('DB_DATABASE_ODOO'),
+            'username' => env('DB_USERNAME_ODOO'),
+            'password' => env('DB_PASSWORD_ODOO'),
+            'charset' => 'utf8',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'schema' => 'public',
+            'sslmode' => 'prefer',
+        ],
+
         'mariadb' => [
             'driver' => 'mariadb',
             'url' => env('DB_URL'),

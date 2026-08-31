@@ -13,7 +13,6 @@ class RetentionController extends Controller
 {
     public function getRetentionStores(Request $request, OdooService $odooService)
     {
-        // 1. Ambil file Excel retensi terbaru
         $folderPath = storage_path('app/private/retensi');
         $files = File::glob("{$folderPath}/*_retensi_jabodetabek.xlsx");
 
@@ -27,14 +26,12 @@ class RetentionController extends Controller
         rsort($files);
         $latestFile = $files[0];
 
-        // 2. Baca file Excel
         $excelData = (new FastExcel)->import($latestFile);
 
         if ($excelData->isEmpty()) {
             return response()->json(['status' => 'success', 'data' => []]);
         }
 
-        // 3. Kumpulkan semua partner_id unik dari Excel
         $partnerIds = $excelData->pluck('partner_id')
             ->filter()
             ->map(fn ($id) => (int) $id)
@@ -42,7 +39,6 @@ class RetentionController extends Controller
             ->values()
             ->toArray();
 
-        // 4. Ambil data lokasi & kontak dari Odoo via XML-RPC
         $odooStoresRaw = $odooService->execute_kw('res.partner', 'search_read', [
             [['id', 'in', $partnerIds]]
         ], [
@@ -51,7 +47,6 @@ class RetentionController extends Controller
 
         $odooStores = collect($odooStoresRaw)->keyBy('id');
 
-        // 5. Ambil data Klaim/Kunjungan Toko Hari Ini dari DB MySQL Lokal
         $currentUserId = $request->user() ? $request->user()->id : null;
         
         $todayVisits = StoreVisit::with('sales')
@@ -60,14 +55,12 @@ class RetentionController extends Controller
             ->get()
             ->keyBy('odoo_partner_id');
 
-        // 6. Gabungkan Data Excel + Odoo + MySQL Store Visits
         $processedData = $excelData->map(function (array $row) use ($odooStores, $todayVisits, $currentUserId) {
             $partnerId = (int) ($row['partner_id'] ?? 0);
             
             $storeDetail = $odooStores->get($partnerId);
             $activeVisit = $todayVisits->get($partnerId);
 
-            // Format tanggal order terakhir
             $lastOrderDate = null;
             if (!empty($row['last_order_date'])) {
                 if ($row['last_order_date'] instanceof DateTimeInterface) {
@@ -77,7 +70,6 @@ class RetentionController extends Controller
                 }
             }
 
-            // Konstruksi informasi klaim toko
             $claimInfo = [
                 'status'          => $activeVisit ? $activeVisit->status : 'AVAILABLE',
                 'store_visit_id'  => $activeVisit ? $activeVisit->id : null,
@@ -89,7 +81,6 @@ class RetentionController extends Controller
             ];
 
             return [
-                // --- Data Metrik Retensi (Excel) ---
                 'partner_id'        => $partnerId,
                 'partner_name'      => (string) ($row['partner_name'] ?? ''),
                 'kota'              => (string) ($row['kota'] ?? ''),
@@ -105,7 +96,6 @@ class RetentionController extends Controller
                 'total_sales'       => (float) ($row['total_sales_2024_plus'] ?? 0),
                 'priority'          => (int) ($row['priority'] ?? 99),
 
-                // --- Data Lokasi & Kontak (Odoo XML-RPC) ---
                 'alamat'            => $storeDetail['street'] ?? null,
                 'latitude'          => isset($storeDetail['partner_latitude']) && $storeDetail['partner_latitude'] !== false
                                         ? (float) $storeDetail['partner_latitude'] 
@@ -115,7 +105,6 @@ class RetentionController extends Controller
                                         : null,
                 'email'             => $storeDetail['email'] ?? null,
 
-                // --- Status Klaim & Kunjungan (MySQL Lokal) ---
                 'claim_info'        => $claimInfo,
             ];
         });
