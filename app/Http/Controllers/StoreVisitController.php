@@ -2,133 +2,230 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
 use App\Http\Requests\ClaimStoreRequest;
 use App\Http\Requests\SubmitVisitReportRequest;
 use App\Models\StoreVisit;
+use App\Models\User;
 use App\Models\VisitReport;
+use App\Services\Odoo\OdooClient;
+use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
+use Exception;
+use Illuminate\Database\QueryException;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Http\Request;
-use Exception;
-use App\Services\Odoo\OdooClient;
 
 class StoreVisitController extends Controller
 {
+    protected OdooClient $odooClient;
+
+    public function __construct(OdooClient $odooClient)
+    {
+        $this->odooClient = $odooClient;
+    }
+
     public function claim(ClaimStoreRequest $request)
     {
         $salesId = $request->user()->id;
-        $partnerId = $request->odoo_partner_id;
-        $today = today()->toDateString();
+        $partnerId = (int) $request->odoo_partner_id;
+        $now = CarbonImmutable::now(config('app.timezone'));
+        $today = $now->toDateString();
+        $weekStart = $now->startOfWeek(CarbonInterface::MONDAY)->startOfDay();
+        $nextWeek = $weekStart->addWeek();
 
-        return DB::transaction(function () use ($salesId, $partnerId, $today) {
-            $existingVisit = StoreVisit::with('sales')
-                ->where('odoo_partner_id', $partnerId)
-                ->whereDate('visit_date', $today)
-                ->lockForUpdate()
-                ->first();
+        try {
+            return DB::transaction(function () use ($salesId, $partnerId, $today, $now, $weekStart, $nextWeek) {
+                // Mengunci row sales agar dua klaim paralel dari sales yang sama
+                // tidak dapat membuat dua kunjungan aktif.
+                User::query()->whereKey($salesId)->lockForUpdate()->firstOrFail();
 
-            if ($existingVisit) {
-                if ($existingVisit->status === 'COMPLETED') {
+                $salesActiveVisit = StoreVisit::query()
+                    ->where('sales_id', $salesId)
+                    ->where('status', 'IN_VISIT')
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($salesActiveVisit) {
+                    $message = $salesActiveVisit->odoo_partner_id === $partnerId
+                        ? 'Anda sudah memiliki kunjungan aktif di toko ini.'
+                        : 'Selesaikan atau batalkan kunjungan aktif sebelum mengunjungi toko lain.';
+
                     return response()->json([
                         'status'  => 'error',
-                        'message' => "Toko ini sudah selesai dikunjungi hari ini oleh {$existingVisit->sales->name}.",
+                        'message' => $message,
+                        'data'    => [
+                            'store_visit_id' => $salesActiveVisit->id,
+                            'odoo_partner_id' => $salesActiveVisit->odoo_partner_id,
+                        ],
                     ], 422);
                 }
 
-                if ($existingVisit->status === 'IN_VISIT') {
-                    $salesName = $existingVisit->sales_id === $salesId ? 'Anda' : $existingVisit->sales->name;
+                $blockingVisit = StoreVisit::with('sales')
+                    ->where('odoo_partner_id', $partnerId)
+                    ->where(function ($query) use ($weekStart, $nextWeek) {
+                        $query->where('status', 'IN_VISIT')
+                            ->orWhere(function ($completedQuery) use ($weekStart, $nextWeek) {
+                                $completedQuery->where('status', 'COMPLETED')
+                                    ->where('check_out_at', '>=', $weekStart)
+                                    ->where('check_out_at', '<', $nextWeek);
+                            });
+                    })
+                    ->orderByRaw("CASE WHEN status = 'IN_VISIT' THEN 0 ELSE 1 END")
+                    ->latest('id')
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($blockingVisit) {
+                    $salesName = $blockingVisit->sales_id === $salesId
+                        ? 'Anda'
+                        : ($blockingVisit->sales?->name ?? 'sales lain');
+                    $message = $blockingVisit->status === 'IN_VISIT'
+                        ? "Toko ini sedang dikunjungi oleh {$salesName}."
+                        : "Toko ini sudah dikunjungi minggu ini oleh {$salesName}.";
+
                     return response()->json([
                         'status'  => 'error',
-                        'message' => "Toko ini sedang dikunjungi oleh {$salesName}.",
+                        'message' => $message,
                     ], 422);
                 }
+
+                $visit = StoreVisit::create([
+                    'odoo_partner_id' => $partnerId,
+                    'sales_id'        => $salesId,
+                    'visit_date'      => $today,
+                    'status'          => 'IN_VISIT',
+                    'active_store_key' => $partnerId,
+                    'active_sales_key' => $salesId,
+                    'check_in_at'     => $now,
+                ]);
+
+                return response()->json([
+                    'status'  => 'success',
+                    'message' => 'Berhasil melakukan klaim toko.',
+                    'data'    => [
+                        'store_visit_id' => $visit->id,
+                        'check_in_at'    => $visit->check_in_at->toDateTimeString(),
+                    ]
+                ], 201);
+            });
+        } catch (QueryException $exception) {
+            if (in_array((string) $exception->getCode(), ['23000', '23505'], true)) {
+                return response()->json([
+                    'status'  => 'error',
+                    'message' => 'Toko atau sales baru saja diklaim pada perangkat lain. Muat ulang data lalu coba lagi.',
+                ], 409);
             }
 
-            $visit = StoreVisit::create([
-                'odoo_partner_id' => $partnerId,
-                'sales_id'        => $salesId,
-                'visit_date'      => $today,
-                'status'          => 'IN_VISIT',
-                'check_in_at'     => now(),
-            ]);
-
-            return response()->json([
-                'status'  => 'success',
-                'message' => 'Berhasil melakukan klaim toko.',
-                'data'    => [
-                    'store_visit_id' => $visit->id,
-                    'check_in_at'    => $visit->check_in_at->toDateTimeString(),
-                ]
-            ], 201);
-        });
+            throw $exception;
+        }
     }
 
     public function submitReport(SubmitVisitReportRequest $request, $visitId)
     {
         $salesId = $request->user()->id;
 
-        $visit = StoreVisit::where('id', $visitId)
-            ->where('sales_id', $salesId)
-            ->first();
-
-        if (!$visit) {
-            return response()->json([
-                'status'  => 'error',
-                'message' => 'Data kunjungan tidak ditemukan atau Anda tidak memiliki akses.',
-            ], 440);
-        }
-
-        if ($visit->status === 'COMPLETED') {
-            return response()->json([
-                'status'  => 'error',
-                'message' => 'Laporan kunjungan toko ini sudah pernah dikirim sebelumnya.',
-            ], 422);
-        }
-
-        DB::beginTransaction();
         try {
-            $photoPaths = [];
-            if ($request->hasFile('photos')) {
-                foreach ($request->file('photos') as $photo) {
+            return DB::transaction(function () use ($request, $visitId, $salesId) {
+                $visit = StoreVisit::where('id', $visitId)
+                    ->where('sales_id', $salesId)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$visit) {
+                    return response()->json([
+                        'status'  => 'error',
+                        'message' => 'Data kunjungan tidak ditemukan atau Anda tidak memiliki akses.',
+                    ], 404);
+                }
+
+                if ($visit->status !== 'IN_VISIT') {
+                    $message = $visit->status === 'COMPLETED'
+                        ? 'Laporan kunjungan toko ini sudah pernah dikirim sebelumnya.'
+                        : 'Kunjungan ini sudah dibatalkan dan tidak dapat dilaporkan.';
+
+                    return response()->json([
+                        'status'  => 'error',
+                        'message' => $message,
+                    ], 422);
+                }
+
+                $photoPaths = [];
+                foreach ($request->file('photos', []) as $photo) {
                     $path = $photo->store('visit_reports/' . date('Y/m'), 'public');
                     $photoPaths[] = Storage::url($path);
                 }
-            }
 
-            VisitReport::create([
-                'store_visit_id'   => $visit->id,
-                'pic_name'         => $request->pic_name,
-                'activities'       => $request->activities,
-                'stock_percentage' => $request->stock_percentage,
-                'stock_pcs'        => $request->stock_pcs,
-                'notes'            => $request->notes,
-                'photos'           => $photoPaths,
-            ]);
+                VisitReport::create([
+                    'store_visit_id'   => $visit->id,
+                    'pic_name'         => $request->pic_name,
+                    'activities'       => $request->activities,
+                    'stock_percentage' => $request->stock_percentage,
+                    'stock_pcs'        => $request->stock_pcs,
+                    'notes'            => $request->notes,
+                    'photos'           => $photoPaths,
+                ]);
 
-            $visit->update([
-                'status'       => 'COMPLETED',
-                'check_out_at' => now(),
-            ]);
+                $visit->update([
+                    'status'           => 'COMPLETED',
+                    'active_store_key' => null,
+                    'active_sales_key' => null,
+                    'check_out_at'     => now(),
+                ]);
 
-            DB::commit();
-
-            return response()->json([
-                'status'  => 'success',
-                'message' => 'Laporan kunjungan berhasil dikirim.',
-                'data'    => [
-                    'store_visit_id' => $visit->id,
-                    'check_out_at'   => $visit->check_out_at->toDateTimeString(),
-                ]
-            ]);
-
+                return response()->json([
+                    'status'  => 'success',
+                    'message' => 'Laporan kunjungan berhasil dikirim.',
+                    'data'    => [
+                        'store_visit_id' => $visit->id,
+                        'check_out_at'   => $visit->check_out_at->toDateTimeString(),
+                    ]
+                ]);
+            });
         } catch (Exception $e) {
-            DB::rollBack();
             return response()->json([
                 'status'  => 'error',
                 'message' => 'Gagal menyimpan laporan kunjungan: ' . $e->getMessage(),
             ], 500);
         }
+    }
+
+    public function cancel(Request $request, $visitId)
+    {
+        $salesId = $request->user()->id;
+
+        return DB::transaction(function () use ($visitId, $salesId) {
+            $visit = StoreVisit::where('id', $visitId)
+                ->where('sales_id', $salesId)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$visit) {
+                return response()->json([
+                    'status'  => 'error',
+                    'message' => 'Data kunjungan tidak ditemukan atau Anda tidak memiliki akses.',
+                ], 404);
+            }
+
+            if ($visit->status !== 'IN_VISIT') {
+                return response()->json([
+                    'status'  => 'error',
+                    'message' => 'Hanya kunjungan aktif yang dapat dibatalkan.',
+                ], 422);
+            }
+
+            $visit->update([
+                'status'           => 'CANCELLED',
+                'active_store_key' => null,
+                'active_sales_key' => null,
+                'check_out_at'     => now(),
+            ]);
+
+            return response()->json([
+                'status'  => 'success',
+                'message' => 'Kunjungan dibatalkan. Toko dapat dikunjungi kembali.',
+            ]);
+        });
     }
 
     public function getActiveVisit(Request $request)
@@ -148,26 +245,29 @@ class StoreVisitController extends Controller
             ], 200);
         }
 
+        $partners = $this->odooClient->executeKw(
+            'res.partner',
+            'search_read',
+            [[['id', '=', (int) $activeVisit->odoo_partner_id]]],
+            ['fields' => ['name'], 'limit' => 1]
+        );
+        $outletName = is_array($partners) && !empty($partners)
+            ? ($partners[0]['name'] ?? null)
+            : null;
+
         return response()->json([
             'success' => true,
             'message' => 'Kunjungan aktif ditemukan',
             'data' => [
                 'visit_id'        => $activeVisit->id,
                 'odoo_partner_id' => $activeVisit->odoo_partner_id,
+                'outlet_name'     => $outletName,
                 'status'          => $activeVisit->status,
             ]
         ], 200);
     }
 
-        protected OdooClient $odooClient;
-
-        // Inject OdooClient lewat constructor
-        public function __construct(OdooClient $odooClient)
-        {
-            $this->odooClient = $odooClient;
-        }
-
-        public function history(Request $request)
+    public function history(Request $request)
     {
         $salesId = $request->user()->id;
 

@@ -17,6 +17,8 @@ class StoreVisit extends Model
         'sales_id',
         'visit_date',
         'status',
+        'active_store_key',
+        'active_sales_key',
         'check_in_at',
         'check_out_at',
     ];
@@ -24,6 +26,8 @@ class StoreVisit extends Model
     protected $casts = [
         'odoo_partner_id' => 'integer',
         'sales_id'        => 'integer',
+        'active_store_key' => 'integer',
+        'active_sales_key' => 'integer',
         'visit_date'      => 'date:Y-m-d',
         'check_in_at'     => 'datetime',
         'check_out_at'    => 'datetime',

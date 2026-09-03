@@ -1,29 +1,39 @@
 <?php
 
-namespace App\Models;
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
-
-class StoreModel extends Model
+return new class extends Migration
 {
-    use HasFactory;
-
-    protected $fillable = [
-        'odoo_id', 'name', 'address', 'city', 'phone', 'email', 'sales_name',
-        'latitude', 'longitude', 'last_order_date', 'days_since', 'weeks_since',
-        'retensi_status', 'aktif_group', 'avg_retensi_weeks', 'gap_vs_average',
-        'total_sales', 'priority'
-    ];
-
-    public function activeClaim()
+    public function up(): void
     {
-        return $this->hasOne(StoreAssignment::class, 'store_id', 'odoo_id')
-                    ->whereIn('status', ['claimed', 'onprogress']);
+        Schema::create('stores', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('odoo_id')->unique();
+            $table->string('name');
+            $table->text('address')->nullable();
+            $table->string('city')->nullable()->index();
+            $table->string('phone')->nullable();
+            $table->string('email')->nullable();
+            $table->string('sales_name')->nullable();
+            $table->decimal('latitude', 10, 7)->nullable();
+            $table->decimal('longitude', 10, 7)->nullable();
+            $table->date('last_order_date')->nullable();
+            $table->unsignedInteger('days_since')->default(0);
+            $table->unsignedInteger('weeks_since')->default(0);
+            $table->string('retensi_status')->nullable()->index();
+            $table->string('aktif_group')->nullable();
+            $table->decimal('avg_retensi_weeks', 8, 2)->default(0);
+            $table->decimal('gap_vs_average', 8, 2)->default(0);
+            $table->decimal('total_sales', 18, 2)->default(0);
+            $table->unsignedInteger('priority')->default(99)->index();
+            $table->timestamps();
+        });
     }
 
-    public function claims()
+    public function down(): void
     {
-        return $this->hasMany(StoreAssignment::class, 'store_id', 'odoo_id');
+        Schema::dropIfExists('stores');
     }
-}
+};
