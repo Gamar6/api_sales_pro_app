@@ -10,11 +10,6 @@ import numpy as np
 # 1. KONFIGURASI ERP
 # ==========================================================
 
-url = "http://erp.fivafood.co.id:8069"
-db = "fivaDB"
-username = "denny.monoarfa@fivafood.co.id"
-password = "Pinky1677"
-
 # ==========================================================
 # 2. CONNECT ERP
 # ==========================================================
