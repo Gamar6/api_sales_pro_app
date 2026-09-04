@@ -1,17 +1,29 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\StockController;
 use App\Http\Controllers\RetentionController;
 use App\Http\Controllers\StoreVisitController;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login']);
+
 Route::middleware('auth:sanctum')->group(function () {
+    // 1. TAMBAHKAN ROUTE INI UNTUK GET USER PROFILE
+    Route::get('/user', function (Request $request) {
+        return response()->json([
+            'status' => 'success',
+            'data'   => $request->user(),
+        ]);
+    });
+
     Route::get('/retensi', [RetentionController::class, 'getRetentionStores']);
     Route::get('/stocks', [StockController::class, 'index']);
     Route::get('/visits/active', [StoreVisitController::class, 'getActiveVisit']);
     Route::post('/change-password', [AuthController::class, 'changePassword']);
+    Route::post('/profile/photo', [ProfileController::class, 'updatePhoto']);
 
     Route::prefix('store-visits')->group(function () {
         Route::post('/claim', [StoreVisitController::class, 'claim']);

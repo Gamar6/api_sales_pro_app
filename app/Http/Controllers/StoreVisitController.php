@@ -14,7 +14,7 @@ use Exception;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
+use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
 
 class StoreVisitController extends Controller
 {
@@ -150,10 +150,15 @@ class StoreVisitController extends Controller
                     ], 422);
                 }
 
+                // --- UPLOAD KE CLOUDINARY ---
                 $photoPaths = [];
                 foreach ($request->file('photos', []) as $photo) {
-                    $path = $photo->store('visit_reports/' . date('Y/m'), 'public');
-                    $photoPaths[] = Storage::url($path);
+                    $uploaded = Cloudinary::upload($photo->getRealPath(), [
+                        'folder' => 'app_sales/visit_reports/' . date('Y/m'),
+                    ]);
+
+                    // Mengambil URL HTTPS aman dari Cloudinary
+                    $photoPaths[] = $uploaded->getSecurePath();
                 }
 
                 VisitReport::create([
@@ -163,7 +168,7 @@ class StoreVisitController extends Controller
                     'stock_percentage' => $request->stock_percentage,
                     'stock_pcs'        => $request->stock_pcs,
                     'notes'            => $request->notes,
-                    'photos'           => $photoPaths,
+                    'photos'           => $photoPaths, // Menyimpan array URL Cloudinary
                 ]);
 
                 $visit->update([
