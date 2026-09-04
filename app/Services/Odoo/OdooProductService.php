@@ -83,7 +83,9 @@ class OdooProductService
      */
     public function getSoldProductsWithStock(int $companyId = 1, int $limit = 500): array
     {
-        // 1. Cari semua produk yang pernah terjual
+        // ============================================================
+        // 1. Cari semua produk yang pernah terjual di Company 1
+        // ============================================================
         $soldLines = $this->client->executeKw(
             'sale.order.line',
             'search_read',
@@ -99,7 +101,9 @@ class OdooProductService
             ]
         );
 
-        // 2. Master list produk
+        // ============================================================
+        // 2. Buat master list produk
+        // ============================================================
         $productMap = [];
 
         foreach ($soldLines as $line) {
@@ -120,9 +124,26 @@ class OdooProductService
                     'id' => $id,
                     'title' => $name,
                     'subtitle' => 'Lokasi: CV. Fiva Food Meat & Supply',
+
+                    // Stok
                     'raw_qty' => 0,
                     'unit' => 'pcs',
+
+                    // Harga
                     'price' => 0,
+
+                    // Data berat
+                    'weight' => 0,
+                    'weight_unit' => 'kg',
+
+                    // Packaging
+                    // Untuk sementara default.
+                    // Nanti bisa kita ambil dari Odoo kalau field packaging
+                    // sudah diketahui.
+                    'package_unit' => 'karton',
+                    'packs_per_package' => 1,
+
+                    // Gambar
                     'imageUrl' => null,
                 ];
             }
@@ -134,7 +155,9 @@ class OdooProductService
 
         $productIds = array_keys($productMap);
 
-        // 3. Ambil stok
+        // ============================================================
+        // 3. Ambil stok produk
+        // ============================================================
         $domainQuant = [
             ['product_id', 'in', $productIds],
             ['location_id.usage', '=', 'internal'],
@@ -154,7 +177,9 @@ class OdooProductService
             ]
         );
 
+        // ============================================================
         // 4. Akumulasi stok
+        // ============================================================
         foreach ($quants as $quant) {
             if (!isset($quant['product_id'][0])) {
                 continue;
@@ -166,15 +191,14 @@ class OdooProductService
                 continue;
             }
 
-            $qty = (int) ($quant['available_quantity'] ?? 0);
+            $qty = (float) ($quant['available_quantity'] ?? 0);
 
             $productMap[$productId]['raw_qty'] += $qty;
         }
 
-        // 5. Ambil harga HANYA untuk product ID yang sudah ditemukan
-        //
-        // Jangan ambil semua product.product.
-        // Kita sudah punya 76 ID dari hasil penjualan.
+        // ============================================================
+        // 5. Ambil informasi produk dari Odoo
+        // ============================================================
         $products = $this->client->executeKw(
             'product.product',
             'search_read',
@@ -187,11 +211,15 @@ class OdooProductService
                 'fields' => [
                     'id',
                     'list_price',
+                    'weight',
+                    'uom_id',
                 ],
             ]
         );
 
-        // 6. Masukkan harga ke master list
+        // ============================================================
+        // 6. Masukkan harga + berat + satuan ke master list
+        // ============================================================
         foreach ($products as $product) {
             $productId = $product['id'] ?? null;
 
@@ -199,10 +227,30 @@ class OdooProductService
                 continue;
             }
 
+            // Harga
             $productMap[$productId]['price'] =
                 (float) ($product['list_price'] ?? 0);
+
+            // Berat dari Odoo
+            $weight = (float) ($product['weight'] ?? 0);
+
+            $productMap[$productId]['weight'] = $weight;
+
+            // Odoo weight menggunakan kg
+            $productMap[$productId]['weight_unit'] = 'kg';
+
+            // UoM dari Odoo
+            if (isset($product['uom_id'][1])) {
+                $productMap[$productId]['unit'] =
+                    strtolower($product['uom_id'][1]) === 'units'
+                        ? 'pcs'
+                        : $product['uom_id'][1];
+            }
         }
 
+        // ============================================================
+        // 7. Kembalikan hasil
+        // ============================================================
         return array_values($productMap);
     }
 

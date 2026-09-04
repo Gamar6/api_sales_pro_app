@@ -17,16 +17,28 @@ class StockController extends Controller
 
     public function index(Request $request)
     {
-        $companyId = 1; // Dikunci khusus Company 1
+        // ============================================================
+        // Company ID dikunci ke Company 1
+        // ============================================================
+        $companyId = 1;
 
-        // 1. Ambil semua produk yang pernah dijual di Company 1 beserta stoknya
+        // ============================================================
+        // Ambil semua produk yang pernah dijual + stok
+        // + harga + berat dari Odoo
+        // ============================================================
         $rawProducts = $this->odoo->getSoldProductsWithStock($companyId);
 
-        // 2. Format status berdasarkan jumlah stok
+        // ============================================================
+        // Format data produk
+        // ============================================================
         $products = array_map(function ($item) {
-            $qty = $item['raw_qty'];
+
+            $qty = (float) ($item['raw_qty'] ?? 0);
+
+            // Format level stok
             $item['level'] = number_format($qty, 0, ',', '.');
 
+            // Status stok
             if ($qty <= 0) {
                 $item['status'] = 'Out of Stock';
             } elseif ($qty < 10) {
@@ -34,18 +46,38 @@ class StockController extends Controller
             } else {
                 $item['status'] = 'In Stock';
             }
+
+            // Pastikan tipe data konsisten
+            $item['raw_qty'] = $qty;
+            $item['price'] = (float) ($item['price'] ?? 0);
+            $item['weight'] = (float) ($item['weight'] ?? 0);
+
             return $item;
+
         }, $rawProducts);
 
-        // 3. Hitung summary statistik
+        // ============================================================
+        // Summary statistik
+        // ============================================================
         $totalSkus = count($products);
-        $lowStockCount = count(array_filter($products, fn($p) => $p['status'] === 'Low Stock' || $p['status'] === 'Out of Stock'));
 
+        $lowStockCount = count(
+            array_filter(
+                $products,
+                fn($p) =>
+                    $p['status'] === 'Low Stock' ||
+                    $p['status'] === 'Out of Stock'
+            )
+        );
+
+        // ============================================================
+        // Response JSON
+        // ============================================================
         return response()->json([
             'status' => 'success',
             'total_skus' => $totalSkus,
             'low_stock_count' => $lowStockCount,
-            'data' => $products
+            'data' => $products,
         ]);
     }
 }
