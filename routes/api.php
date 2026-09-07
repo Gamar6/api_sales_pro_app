@@ -5,10 +5,16 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\StockController;
 use App\Http\Controllers\RetentionController;
 use App\Http\Controllers\StoreVisitController;
+use App\Http\Controllers\PasswordResetController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login']);
+
+Route::post('/forgot-password', [PasswordResetController::class, 'sendResetLinkEmail']);
+
+// Endpoint eksekusi ganti password baru
+Route::post('/reset-password', [PasswordResetController::class, 'reset']);
 
 Route::middleware('auth:sanctum')->group(function () {
     // 1. TAMBAHKAN ROUTE INI UNTUK GET USER PROFILE
