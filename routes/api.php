@@ -13,11 +13,9 @@ Route::post('/login', [AuthController::class, 'login']);
 
 Route::post('/forgot-password', [PasswordResetController::class, 'sendResetLinkEmail']);
 
-// Endpoint eksekusi ganti password baru
 Route::post('/reset-password', [PasswordResetController::class, 'reset']);
 
 Route::middleware('auth:sanctum')->group(function () {
-    // 1. TAMBAHKAN ROUTE INI UNTUK GET USER PROFILE
     Route::get('/user', function (Request $request) {
         return response()->json([
             'status' => 'success',

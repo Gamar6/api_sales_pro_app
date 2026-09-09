@@ -2,8 +2,8 @@
 
 namespace App\Providers;
 
+use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
-use Illuminate\Auth\Notifications\ResetPassword;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -20,9 +20,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Mengarahkan URL reset password langsung ke custom deep link aplikasi Flutter
-        ResetPassword::createUrlUsing(function ($notifiable, $token) {
-            return 'appsales://reset-password?token=' . $token . '&email=' . $notifiable->getEmailForPasswordReset();
-        });
+        Vite::prefetch(concurrency: 3);
     }
 }
