@@ -11,8 +11,7 @@ defineEmits(["export"]);
                 class="flex h-10 w-10 items-center justify-center rounded bg-primary-container text-on-primary"
             >
                 <span class="material-symbols-outlined text-[24px]"
-                    >satellite_alt</span
-                >
+                    >satellite_alt</span>
             </div>
             <div>
                 <div class="flex flex-wrap items-center gap-space-xs">

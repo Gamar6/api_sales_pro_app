@@ -47,6 +47,13 @@ class StoreVisit extends Model
     {
         return $query->whereDate('visit_date', today());
     }
+
+    public function scopeCheckedInToday($query)
+    {
+        return $query
+            ->whereNotNull('check_in_at')
+            ->whereDate('check_in_at', today());
+    }
     
     public function partner(): BelongsTo
     {

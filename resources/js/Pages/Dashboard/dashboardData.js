@@ -20,16 +20,6 @@ export const modules = [
 
 export const kpis = [
     {
-        label: "Active Sales Reps Today",
-        value: "42",
-        suffix: "/ 48 Reps",
-        progress: 87.5,
-        badge: "LIVE BEACON",
-        trend: "+4 vs yesterday",
-        detail: "6 En Route HQ",
-        icon: "satellite_alt",
-    },
-    {
         label: "Total Check-Ins Today",
         value: "318",
         suffix: "Visits",
@@ -40,20 +30,10 @@ export const kpis = [
         icon: "trending_up",
     },
     {
-        label: "New Registered Stores",
-        value: "27",
-        suffix: "Captured",
-        badge: "8 PENDING GEO",
-        trend: "19 Approved",
-        detail: "8 Verification Req.",
-        icon: "storefront",
-        action: "AUDIT NOW",
-    },
-    {
         label: "Avg Visit Duration",
         value: "28m 45s",
         suffix: "/ store",
-        progress: 94.2,
+        progress: 34.2,
         badge: "GUIDE: 20-45m",
         trend: "Compliance Optimal",
         detail: "6 Anomaly Flags",
