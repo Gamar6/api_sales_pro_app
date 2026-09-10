@@ -118,5 +118,4 @@ const kpis = computed(() => {
         </main>
     </div>
 </AdminLayout>
-
 </template>

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use Carbon\Carbon;
+use App\Models\User;
 use App\Models\StoreVisit;
 use App\Models\VisitReport;
 use Illuminate\Http\Request;
@@ -55,37 +57,56 @@ class DashboardController extends Controller
             );
         }
 
-        $salesOrderChart = VisitReport::query()
-            ->whereJsonContains('activities', 'Cek')
-            ->whereHas('visit', function ($query) use (
-                $selectedMonth,
-                $selectedYear
-            ) {
-                $query
-                    ->whereYear('visit_date', $selectedYear)
-                    ->whereMonth('visit_date', $selectedMonth);
-            })
-            ->with([
-                'visit.sales:id,name',
-            ])
-            ->get()
-            ->groupBy(function ($report) {
-                return $report->visit?->sales_id;
-            })
-            ->map(function ($reports) {
+        $visitReports = VisitReport::query()
+        ->whereJsonContains('activities', 'Cek')
+        ->whereHas('visit', function ($query) use ($selectedMonth, $selectedYear) {
+            $query->whereYear('visit_date', $selectedYear)
+                ->whereMonth('visit_date', $selectedMonth);
+        })
+        ->with('visit')
+        ->get()
+        ->groupBy(fn ($report) => $report->visit?->sales_id);
 
-                $firstReport = $reports->first();
+        // 2. Query dari Model User agar semua sales tetap muncul
+        $salesOrderChart = User::query() 
+            ->where('role', 'sales')
+
+            ->get()
+            ->map(function ($user) use ($visitReports) {
+                // Ambil laporan milik sales ini (jika tidak ada, berikan collection kosong)
+                $reports = $visitReports->get($user->id, collect());
+
+                // Inisialisasi template mingguan (Minggu 1 - 5)
+                $weeklyData = [
+                    'week_1' => 0,
+                    'week_2' => 0,
+                    'week_3' => 0,
+                    'week_4' => 0,
+                    'week_5' => 0,
+                ];
+
+                // Kelompokkan data ke masing-masing minggu
+                foreach ($reports as $report) {
+                    if ($report->visit?->visit_date) {
+                        $visitDate = Carbon::parse($report->visit->visit_date);
+                        
+                        // Menentukan minggu ke-berapa dalam bulan tersebut (1 - 5)
+                        $weekNumber = $visitDate->weekOfMonth; 
+                        $key = "week_{$weekNumber}";
+
+                        if (isset($weeklyData[$key])) {
+                            $weeklyData[$key]++;
+                        }
+                    }
+                }
 
                 return [
-                    'salesId' => $firstReport->visit?->sales_id,
-
-                    'name' => $firstReport->visit?->sales?->name
-                        ?? 'Unknown Sales',
-
-                    'orders' => $reports->count(),
+                    'salesId' => $user->id,
+                    'name'    => $user->name ?? 'Unknown Sales',
+                    'orders'  => $reports->count(),  
+                    'weekly'  => $weeklyData,       
                 ];
             })
-            ->filter(fn ($sales) => $sales['salesId'] !== null)
             ->sortByDesc('orders')
             ->values();
 
