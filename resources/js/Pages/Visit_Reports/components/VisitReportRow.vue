@@ -27,6 +27,35 @@ const duration = computed(() => {
     return `${minutes}m ${String(remainingSeconds).padStart(2, "0")}s`;
 });
 
+const activities = computed(() => {
+    const value = props.visit.activities;
+
+    if (!value) {
+        return [];
+    }
+
+    if (typeof value === "string") {
+        try {
+            const parsed = JSON.parse(value);
+
+            return Array.isArray(parsed)
+                ? parsed
+                : value.split(",").map((item) => item.trim());
+        } catch {
+            return value
+                .split(",")
+                .map((item) => item.trim())
+                .filter(Boolean);
+        }
+    }
+
+    if (Array.isArray(value)) {
+        return value;
+    }
+
+    return [];
+});
+
 const statusConfig = computed(() => {
     const status = props.visit.status;
 
@@ -73,7 +102,6 @@ const formatDate = (date) => {
         year: "numeric",
     });
 };
-
 </script>
 
 <template>
@@ -89,7 +117,6 @@ const formatDate = (date) => {
 
         <td class="py-space-sm px-space-base">
             <div class="flex flex-col">
-
                 <span class="font-body-sm text-body-sm text-secondary">
                     {{ formatDate(visit.visit_date) }}
                 </span>
@@ -185,6 +212,34 @@ const formatDate = (date) => {
             </div>
         </td>
 
+        <!-- Activities -->
+
+        <td class="py-space-sm px-space-base">
+            <div
+                v-if="activities.length"
+                class="flex flex-wrap gap-1.5 max-w-[220px]"
+            >
+                <span
+                    v-for="(activity, index) in activities.slice(0, 3)"
+                    :key="index"
+                    class="px-2 py-1 rounded-full bg-surface-container-high text-primary text-[10px] font-medium whitespace-nowrap"
+                >
+                    {{ activity }}
+                </span>
+
+                <span
+                    v-if="activities.length > 3"
+                    class="px-2 py-1 rounded-full bg-primary-container text-on-primary text-[10px] font-medium"
+                >
+                    +{{ activities.length - 3 }}
+                </span>
+            </div>
+
+            <span v-else class="text-[11px] text-secondary italic">
+                No activities
+            </span>
+        </td>
+
         <!-- Status -->
 
         <td class="py-space-sm px-space-base">
@@ -243,7 +298,6 @@ const formatDate = (date) => {
                     {{ selected ? "arrow_forward" : "chevron_right" }}
                 </span>
             </button>
-            
         </td>
     </tr>
 </template>

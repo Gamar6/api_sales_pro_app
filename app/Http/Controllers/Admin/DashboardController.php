@@ -58,7 +58,7 @@ class DashboardController extends Controller
         }
 
         $visitReports = VisitReport::query()
-        ->whereJsonContains('activities', 'Pemasangan Stiker')
+        ->whereJsonContains('activities', 'Order')
         ->whereHas('visit', function ($query) use ($selectedMonth, $selectedYear) {
             $query->whereYear('visit_date', $selectedYear)
                 ->whereMonth('visit_date', $selectedMonth);

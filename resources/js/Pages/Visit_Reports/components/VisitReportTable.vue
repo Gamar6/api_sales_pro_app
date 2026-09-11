@@ -106,8 +106,10 @@ defineEmits(["select", "page-change"]);
                             Visit Duration
                         </th>
 
-                        <th class="py-space-sm px-space-base">Status</th>
+                        <th class="py-space-sm px-space-base">Activities</th>
 
+                        <th class="py-space-sm px-space-base">Status</th>
+                        
                         <th class="py-space-sm px-space-base">Report</th>
 
                         <th class="py-space-sm px-space-base text-right">
@@ -127,7 +129,7 @@ defineEmits(["select", "page-change"]);
 
                     <tr v-if="!visits.length">
                         <td
-                            colspan="7"
+                            colspan="8"
                             class="py-16 text-center text-secondary"
                         >
                             <div class="flex flex-col items-center gap-3">

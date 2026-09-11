@@ -227,6 +227,8 @@ class VisitReportController extends Controller
                             ->format('Y-m-d')
                         : null,
 
+                    'activities' => $visit->report?->activities ?? [],
+
                     'status' => $visit->status,
 
                     'check_in_at' => $visit->check_in_at
@@ -297,15 +299,6 @@ class VisitReportController extends Controller
                             $partner['vat']
                             ?? null,
 
-                        /*
-                        |--------------------------------------------------------------------------
-                        | Odoo relational fields seperti state_id/country_id
-                        | biasanya berbentuk:
-                        |
-                        | [id, "Nama"]
-                        |
-                        */
-
                         'state' => isset(
                             $partner['state_id'][1]
                         )
@@ -318,12 +311,6 @@ class VisitReportController extends Controller
                             ? $partner['country_id'][1]
                             : null,
                     ],
-
-                    /*
-                    |--------------------------------------------------------------------------
-                    | Visit Report
-                    |--------------------------------------------------------------------------
-                    */
 
                     'report' => $visit->report
                         ? [

@@ -231,7 +231,6 @@ function generateAuditReport() {
                 <!-- HEADER -->
                 <!-- ==================================================== -->
 
-        
                 <VisitReportHeader
                     :statistics="statistics"
                     @export="exportReports"
