@@ -17,7 +17,6 @@ import {
     telemetryFeed,
 } from "./dashboardData";
 
-
 const props = defineProps({
     dashboardStats: {
         type: Object,
@@ -28,35 +27,23 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
-
 });
-
 
 const activeModule = ref("dashboard");
 
 const SHIFT_GOAL = 10;
 
 const kpis = computed(() => {
+    const totalCheckIns = props.dashboardStats.totalCheckInsToday ?? 0;
 
-    const totalCheckIns =
-        props.dashboardStats.totalCheckInsToday ?? 0;
+    const progress = Math.min((totalCheckIns / SHIFT_GOAL) * 100, 100);
 
-    const progress = Math.min(
-        (totalCheckIns / SHIFT_GOAL) * 100,
-        100
-    );
-
-    const remaining = Math.max(
-        SHIFT_GOAL - totalCheckIns,
-        0
-    );
+    const remaining = Math.max(SHIFT_GOAL - totalCheckIns, 0);
 
     const averageVisitDuration =
         props.dashboardStats.averageVisitDuration ?? "0m 00s";
 
-
     return [
-
         {
             ...staticKpis[0],
 
@@ -74,13 +61,10 @@ const kpis = computed(() => {
 
         {
             ...staticKpis[1],
-            value: averageVisitDuration
+            value: averageVisitDuration,
         },
     ];
-
 });
-
-
 </script>
 
 <template>
@@ -89,33 +73,31 @@ const kpis = computed(() => {
             <main class="w-full">
                 <div class="flex w-full flex-col">
                     <div class="flex flex-col gap-space-xl p-space-xl">
+                        <DashboardHeader />
 
-                    <DashboardHeader />
+                        <DashboardKpiGrid :kpis="kpis" />
 
-                    <DashboardKpiGrid :kpis="kpis" />
+                        <DashboardModuleTabs
+                            v-model:active-module="activeModule"
+                            :modules="modules"
+                        />
 
-                    <DashboardModuleTabs
-                        v-model:active-module="activeModule"
-                        :modules="modules"
-                    />
+                        <DashboardOverview
+                            v-if="activeModule === 'dashboard'"
+                            :clusters="clusters"
+                            :telemetry="telemetryFeed"
+                            :sales-order-chart="salesOrderChart"
+                        />
 
-                    <DashboardOverview
-                        v-if="activeModule === 'dashboard'"
-                        :clusters="clusters"
-                        :telemetry="telemetryFeed"
-                        :sales-order-chart="salesOrderChart"
-                    />
-
-                    <DashboardModulePanels
-                        v-else
-                        :active-module="activeModule"
-                        :products="products"
-                        :stores="stores"
-                    />
-
+                        <DashboardModulePanels
+                            v-else
+                            :active-module="activeModule"
+                            :products="products"
+                            :stores="stores"
+                        />
+                    </div>
                 </div>
-            </div>
-        </main>
-    </div>
-</AdminLayout>
+            </main>
+        </div>
+    </AdminLayout>
 </template>
