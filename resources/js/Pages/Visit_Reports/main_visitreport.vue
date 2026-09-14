@@ -50,7 +50,9 @@ const selectedVisit = ref(null);
 */
 
 const localFilters = ref({
-    date: props.filters?.date ?? "",
+    date: props.filters?.date !== undefined && props.filters?.date !== ""
+        ? props.filters.date
+        : getTodayDate(),
     sales_id: props.filters?.sales_id ?? "",
     status: props.filters?.status ?? "",
     search: props.filters?.search ?? "",

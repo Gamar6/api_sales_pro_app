@@ -84,7 +84,8 @@ const kpis = computed(() => {
 
                         <DashboardOverview
                             v-if="activeModule === 'dashboard'"
-                            :clusters="clusters"
+                            :dashboard-stats="props.dashboardStats"
+                            :stores="props.stores"
                             :telemetry="telemetryFeed"
                             :sales-order-chart="salesOrderChart"
                         />
@@ -93,7 +94,7 @@ const kpis = computed(() => {
                             v-else
                             :active-module="activeModule"
                             :products="products"
-                            :stores="stores"
+                            :stores="staticStores"
                         />
                     </div>
                 </div>

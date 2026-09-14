@@ -2,14 +2,14 @@
 import { computed, ref } from "vue";
 
 const props = defineProps({
-    clusters: {
+    stores: {
         type: Array,
-        required: true,
+        default: () => [],
     },
 
     telemetry: {
         type: Array,
-        required: true,
+        default: () => [],
     },
 
     salesOrderChart: {
@@ -22,7 +22,7 @@ const alertVisible = ref(true);
 
 /*
 |--------------------------------------------------------------------------
-| Bar Chart Configuration
+| Sales Order Performance
 |--------------------------------------------------------------------------
 */
 
@@ -31,15 +31,17 @@ const chartMaxValue = computed(() => {
         return 1;
     }
 
-    return Math.max(
-        ...props.salesOrderChart.map((item) => item.orders)
+    const max = Math.max(
+        ...props.salesOrderChart.map((item) => Number(item.orders || 0)),
     );
+
+    return Math.max(max, 1);
 });
 
 const totalOrders = computed(() => {
     return props.salesOrderChart.reduce(
         (total, item) => total + Number(item.orders || 0),
-        0
+        0,
     );
 });
 
@@ -49,7 +51,7 @@ const topSales = computed(() => {
     }
 
     return props.salesOrderChart.reduce((highest, current) => {
-        return current.orders > highest.orders
+        return Number(current.orders || 0) > Number(highest.orders || 0)
             ? current
             : highest;
     });
@@ -57,431 +59,513 @@ const topSales = computed(() => {
 
 const averageOrders = computed(() => {
     if (!props.salesOrderChart.length) {
+        return "0.0";
+    }
+
+    return (totalOrders.value / props.salesOrderChart.length).toFixed(1);
+});
+
+const getBarHeight = (orders) => {
+    const value = Number(orders || 0);
+
+    if (!value || chartMaxValue.value === 0) {
+        return 4;
+    }
+
+    const percentage = (value / chartMaxValue.value) * 100;
+
+    return Math.max(percentage, 6);
+};
+
+/*
+|--------------------------------------------------------------------------
+| Area dengan Order Tertinggi
+|--------------------------------------------------------------------------
+|
+| Backend mengirim:
+|
+| {
+|     name: "Bekasi",
+|     reps: 5,
+|     visited: 32,
+|     total: 80,
+|     percentage: 40
+| }
+|
+| "visited" = toko yang memiliki VisitReport dengan activity "Order".
+|
+*/
+
+const sortedStores = computed(() => {
+    return [...props.stores]
+        .map((store) => ({
+            ...store,
+            reps: Number(store.reps || 0),
+            visited: Number(store.visited || 0),
+            total: Number(store.total || 0),
+            percentage: Number(store.percentage || 0),
+        }))
+        .sort((a, b) => {
+            if (b.percentage !== a.percentage) {
+                return b.percentage - a.percentage;
+            }
+
+            return b.visited - a.visited;
+        });
+});
+
+const topAreas = computed(() => {
+    return sortedStores.value.slice(0, 5);
+});
+
+const totalAreaStores = computed(() => {
+    return props.stores.reduce(
+        (total, store) => total + Number(store.total || 0),
+        0,
+    );
+});
+
+const totalAreaOrders = computed(() => {
+    return props.stores.reduce(
+        (total, store) => total + Number(store.visited || 0),
+        0,
+    );
+});
+
+const overallAreaPercentage = computed(() => {
+    if (!totalAreaStores.value) {
         return 0;
     }
 
-    return (
-        totalOrders.value / props.salesOrderChart.length
-    ).toFixed(1);
+    return Math.round((totalAreaOrders.value / totalAreaStores.value) * 100);
 });
 
 /*
 |--------------------------------------------------------------------------
-| Bar Height
+| Telemetry
 |--------------------------------------------------------------------------
-|
-| Minimum 4% supaya bar dengan value kecil tetap terlihat.
-|
 */
 
-const getBarHeight = (orders) => {
-    if (!orders || chartMaxValue.value === 0) {
-        return 0;
+const telemetryItems = computed(() => {
+    return props.telemetry.slice(0, 6);
+});
+
+const getTelemetryStatusClass = (status) => {
+    const normalized = String(status || "").toLowerCase();
+
+    if (
+        normalized.includes("success") ||
+        normalized.includes("active") ||
+        normalized.includes("online") ||
+        normalized.includes("completed")
+    ) {
+        return "bg-emerald-500";
     }
 
-    const percentage =
-        (Number(orders) / chartMaxValue.value) * 100;
+    if (normalized.includes("warning") || normalized.includes("pending")) {
+        return "bg-amber-500";
+    }
 
-    return Math.max(percentage, 4);
+    if (
+        normalized.includes("error") ||
+        normalized.includes("failed") ||
+        normalized.includes("offline")
+    ) {
+        return "bg-red-500";
+    }
+
+    return "bg-slate-400";
 };
 </script>
 
 <template>
     <section class="flex flex-col gap-space-xl">
+        <!-- ============================================================= -->
+        <!-- SALES ORDER + AREA PERFORMANCE -->
+        <!-- ============================================================= -->
 
-    <div class="grid grid-cols-1 gap-space-lg lg:grid-cols-3">
+        <div class="grid grid-cols-1 gap-space-lg lg:grid-cols-3">
+            <!-- ========================================================= -->
+            <!-- SALES ORDER PERFORMANCE -->
+            <!-- ========================================================= -->
 
-        <article
-            class="rounded-lg bg-surface-container-lowest p-space-lg shadow-sm lg:col-span-2"
-        >
-            <!-- Header -->
-
-            <div
-                class="flex flex-col justify-between gap-2 pb-space-base sm:flex-row sm:items-center"
+            <article
+                class="rounded-lg bg-surface-container-lowest p-space-lg shadow-sm lg:col-span-2"
             >
-                <div>
-                    <h2
-                        class="font-headline-sm text-headline-sm font-semibold text-primary"
-                    >
-                        Sales Order Performance
-                    </h2>
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <p
+                            class="text-xs font-semibold uppercase tracking-[0.12em] text-on-surface-variant"
+                        >
+                            Performance
+                        </p>
 
-                    <p
-                        class="font-body-sm text-body-sm text-secondary"
+                        <h2 class="mt-1 text-lg font-bold text-on-surface">
+                            Sales Order Performance
+                        </h2>
+
+                        <p class="mt-1 text-sm text-on-surface-variant">
+                            Distribusi order berdasarkan sales pada periode
+                            terpilih.
+                        </p>
+                    </div>
+
+                    <div
+                        class="rounded-full bg-surface-container px-3 py-1.5 text-xs font-semibold text-on-surface-variant"
                     >
-                        Total completed order activities per sales
-                    </p>
+                        {{ props.salesOrderChart.length }} Sales
+                    </div>
                 </div>
 
-                <span
-                    class="rounded bg-surface-container px-2 py-0.5 font-label-caps text-label-caps text-primary"
-                >
-                    Order Activity
-                </span>
-            </div>
+                <!-- Chart -->
 
-            <div
-                v-if="salesOrderChart.length"
-                class="mt-space-md h-64 rounded bg-surface-container-low p-space-base"
-            >
                 <div
-                    class="flex h-full items-end justify-around gap-3"
+                    v-if="salesOrderChart.length"
+                    class="mt-8 flex h-64 items-end gap-3 overflow-x-auto pb-2"
                 >
                     <div
-                        v-for="item in salesOrderChart"
-                        :key="item.salesId"
-                        class="group flex h-full min-w-0 flex-1 flex-col items-center justify-end"
+                        v-for="sales in salesOrderChart"
+                        :key="sales.salesId"
+                        class="flex min-w-[72px] flex-1 flex-col items-center justify-end gap-2"
                     >
-                        <!-- Order Value -->
+                        <!-- Order value -->
 
-                        <span
-                            class="mb-2 font-code-metric text-xs font-semibold text-primary"
-                        >
-                            {{ item.orders }}
+                        <span class="text-xs font-semibold text-on-surface">
+                            {{ sales.orders }}
                         </span>
 
                         <!-- Bar -->
 
                         <div
-                            class="relative flex h-[190px] w-full max-w-[56px] items-end"
+                            class="flex h-48 w-full items-end justify-center rounded-md bg-surface-container"
                         >
-                            <!-- Background -->
-
                             <div
-                                class="absolute inset-0 rounded-t bg-surface-container"
-                            ></div>
-
-                            <!-- Actual Bar -->
-
-                            <div
-                                class="relative w-full rounded-t bg-primary-container transition-all duration-500 group-hover:opacity-80"
+                                class="w-8 rounded-t-md bg-primary transition-all duration-300"
                                 :style="{
-                                    height: `${getBarHeight(
-                                        item.orders
-                                    )}%`,
+                                    height: `${getBarHeight(sales.orders)}%`,
                                 }"
                             ></div>
                         </div>
 
-                        <!-- Sales Name -->
+                        <!-- Sales name -->
 
                         <span
-                            class="mt-2 w-full truncate text-center text-[11px] font-medium text-secondary"
-                            :title="item.name"
+                            class="max-w-[72px] truncate text-center text-xs text-on-surface-variant"
+                            :title="sales.name"
                         >
-                            {{ item.name }}
+                            {{ sales.name }}
                         </span>
                     </div>
                 </div>
-            </div>
 
-            <!-- ==================================================== -->
-            <!-- EMPTY STATE -->
-            <!-- ==================================================== -->
+                <!-- Empty state -->
 
-            <div
-                v-else
-                class="flex h-64 items-center justify-center rounded bg-surface-container-low"
-            >
-                <div class="text-center">
-                    <span
-                        class="material-symbols-outlined mb-2 text-3xl text-secondary"
-                    >
-                        bar_chart
-                    </span>
-
-                    <p class="font-body-sm text-body-sm text-secondary">
-                        No order activity found for this period
-                    </p>
-                </div>
-            </div>
-
-            <div
-                class="mt-space-md grid grid-cols-1 gap-2 rounded bg-surface-container-low p-space-sm sm:grid-cols-3"
-            >
-                <!-- Total Orders -->
-
-                <div>
-                    <span
-                        class="font-label-caps text-[10px] uppercase text-secondary"
-                    >
-                        Total Orders
-                    </span>
-
-                    <strong
-                        class="block font-title-md text-title-md text-primary"
-                    >
-                        {{ totalOrders }}
-                    </strong>
-                </div>
-
-                <!-- Top Sales -->
-
-                <div>
-                    <span
-                        class="font-label-caps text-[10px] uppercase text-secondary"
-                    >
-                        Top Sales
-                    </span>
-
-                    <strong
-                        class="block truncate font-title-md text-title-md text-primary"
-                    >
-                        {{
-                            topSales
-                                ? topSales.name
-                                : "-"
-                        }}
-                    </strong>
-                </div>
-
-                <!-- Average -->
-
-                <div>
-                    <span
-                        class="font-label-caps text-[10px] uppercase text-secondary"
-                    >
-                        Avg Orders / Sales
-                    </span>
-
-                    <strong
-                        class="block font-title-md text-title-md text-primary"
-                    >
-                        {{ averageOrders }}
-                    </strong>
-                </div>
-            </div>
-        </article>
-
-        <article
-            class="rounded-lg bg-surface-container-lowest p-space-lg shadow-sm"
-        >
-            <div class="flex items-center justify-between">
-                <h2
-                    class="font-headline-sm text-headline-sm font-semibold text-primary"
-                >
-                    Cluster Deployment
-                </h2>
-
-                <span
-                    class="material-symbols-outlined text-secondary"
-                >
-                    hub
-                </span>
-            </div>
-
-            <p
-                class="pb-space-md font-body-sm text-body-sm text-secondary"
-            >
-                Live agent dispersal and device telemetry status
-            </p>
-
-            <div class="flex flex-col gap-space-sm">
                 <div
-                    v-for="cluster in clusters"
-                    :key="cluster.name"
-                    class="rounded bg-surface-container-low p-space-sm"
+                    v-else
+                    class="mt-8 flex h-64 items-center justify-center rounded-lg bg-surface-container"
                 >
-                    <div class="flex justify-between">
-                        <span
-                            class="font-title-md text-title-md text-primary"
-                        >
-                            {{ cluster.name }}
-                        </span>
+                    <div class="text-center">
+                        <p class="text-sm font-semibold text-on-surface">
+                            Belum ada data order
+                        </p>
 
-                        <strong
-                            class="font-code-metric text-primary-container"
+                        <p class="mt-1 text-xs text-on-surface-variant">
+                            Data akan muncul setelah terdapat report dengan
+                            aktivitas Order.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Summary -->
+
+                <div
+                    class="mt-6 grid grid-cols-3 divide-x divide-outline-variant rounded-lg bg-surface-container"
+                >
+                    <div class="px-4 py-3">
+                        <p class="text-xs text-on-surface-variant">
+                            Total Orders
+                        </p>
+
+                        <p class="mt-1 text-lg font-bold text-on-surface">
+                            {{ totalOrders.toLocaleString() }}
+                        </p>
+                    </div>
+
+                    <div class="px-4 py-3">
+                        <p class="text-xs text-on-surface-variant">
+                            Average / Sales
+                        </p>
+
+                        <p class="mt-1 text-lg font-bold text-on-surface">
+                            {{ averageOrders }}
+                        </p>
+                    </div>
+
+                    <div class="px-4 py-3">
+                        <p class="text-xs text-on-surface-variant">Top Sales</p>
+
+                        <p
+                            class="mt-1 truncate text-lg font-bold text-on-surface"
+                            :title="topSales?.name"
                         >
-                            {{ cluster.reps }} Reps
-                        </strong>
+                            {{ topSales?.name || "-" }}
+                        </p>
+                    </div>
+                </div>
+            </article>
+
+            <!-- ========================================================= -->
+            <!-- AREA DENGAN ORDER TERTINGGI -->
+            <!-- ========================================================= -->
+
+            <article
+                class="rounded-lg bg-surface-container-lowest p-space-lg shadow-sm"
+            >
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <p
+                            class="text-xs font-semibold uppercase tracking-[0.12em] text-on-surface-variant"
+                        >
+                            Area
+                        </p>
+
+                        <h2 class="mt-1 text-lg font-bold text-on-surface">
+                            Area dengan Order Tertinggi
+                        </h2>
+
+                        <p class="mt-1 text-sm text-on-surface-variant">
+                            Berdasarkan toko yang sudah melakukan Order.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Overall -->
+
+                <div class="mt-6 rounded-lg bg-surface-container p-4">
+                    <div class="flex items-end justify-between gap-3">
+                        <div>
+                            <p class="text-xs text-on-surface-variant">
+                                Overall Coverage
+                            </p>
+
+                            <p class="mt-1 text-2xl font-bold text-on-surface">
+                                {{ overallAreaPercentage }}%
+                            </p>
+                        </div>
+
+                        <p class="text-xs text-on-surface-variant">
+                            {{ totalAreaOrders.toLocaleString() }}
+                            /
+                            {{ totalAreaStores.toLocaleString() }}
+                            toko
+                        </p>
                     </div>
 
                     <div
-                        class="flex justify-between text-xs text-secondary"
-                    >
-                        <span>
-                            Target: {{ cluster.target }} Visits
-                        </span>
-
-                        <span class="text-emerald-600">
-                            {{ cluster.completed }} Completed
-                            ({{ cluster.percentage }}%)
-                        </span>
-                    </div>
-
-                    <div
-                        class="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-container"
+                        class="mt-3 h-2 overflow-hidden rounded-full bg-surface-container-high"
                     >
                         <div
-                            class="h-full rounded-full bg-primary-container"
+                            class="h-full rounded-full bg-primary transition-all duration-500"
                             :style="{
-                                width: `${cluster.percentage}%`,
+                                width: `${Math.min(
+                                    overallAreaPercentage,
+                                    100,
+                                )}%`,
                             }"
                         ></div>
                     </div>
                 </div>
+
+                <!-- Area list -->
+
+                <div v-if="topAreas.length" class="mt-5 flex flex-col gap-4">
+                    <div
+                        v-for="(area, index) in topAreas"
+                        :key="area.name || index"
+                        class="group"
+                    >
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-2">
+                                    <span
+                                        class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-container text-[10px] font-bold text-on-surface-variant"
+                                    >
+                                        {{ index + 1 }}
+                                    </span>
+
+                                    <p
+                                        class="truncate text-sm font-semibold text-on-surface"
+                                        :title="area.name"
+                                    >
+                                        {{ area.name || "Unknown Area" }}
+                                    </p>
+                                </div>
+
+                                <p
+                                    class="mt-1 pl-8 text-xs text-on-surface-variant"
+                                >
+                                    {{ area.visited }} order /
+                                    {{ area.total }} toko
+                                </p>
+                            </div>
+
+                            <span
+                                class="shrink-0 text-sm font-bold text-on-surface"
+                            >
+                                {{ area.percentage }}%
+                            </span>
+                        </div>
+
+                        <div
+                            class="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-container"
+                        >
+                            <div
+                                class="h-full rounded-full bg-primary transition-all duration-500"
+                                :style="{
+                                    width: `${Math.min(area.percentage, 100)}%`,
+                                }"
+                            ></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Empty -->
+
+                <div
+                    v-else
+                    class="mt-6 rounded-lg bg-surface-container p-6 text-center"
+                >
+                    <p class="text-sm font-semibold text-on-surface">
+                        Belum ada data area
+                    </p>
+
+                    <p class="mt-1 text-xs text-on-surface-variant">
+                        Data area akan muncul setelah snapshot retensi tersedia.
+                    </p>
+                </div>
+            </article>
+        </div>
+
+        <!-- ============================================================= -->
+        <!-- ALERT -->
+        <!-- ============================================================= -->
+
+        <article
+            v-if="alertVisible"
+            class="rounded-lg bg-surface-container-lowest p-space-lg shadow-sm"
+        >
+            <div class="flex items-start justify-between gap-4">
+                <div class="flex gap-4">
+                    <div
+                        class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700"
+                    >
+                        !
+                    </div>
+
+                    <div>
+                        <h3 class="text-sm font-bold text-on-surface">
+                            Dashboard Monitoring
+                        </h3>
+
+                        <p
+                            class="mt-1 text-sm leading-6 text-on-surface-variant"
+                        >
+                            Pantau aktivitas sales, performa order, dan coverage
+                            toko dari dashboard ini.
+                        </p>
+                    </div>
+                </div>
+
+                <button
+                    type="button"
+                    class="rounded-md px-2 py-1 text-xs font-semibold text-on-surface-variant transition hover:bg-surface-container"
+                    @click="alertVisible = false"
+                >
+                    Tutup
+                </button>
             </div>
         </article>
-    </div>
 
-    <div
-        v-if="alertVisible"
-        class="flex flex-col justify-between gap-space-md rounded-lg bg-gradient-to-r from-orange-50 via-surface-container-lowest to-surface-container-low p-space-base shadow-sm md:flex-row md:items-center"
-    >
-        <div>
-            <strong
-                class="font-headline-sm text-headline-sm text-primary"
-            >
-                Fast-Action Dispatch Alert
-            </strong>
+        <!-- ============================================================= -->
+        <!-- TELEMETRY -->
+        <!-- ============================================================= -->
 
-            <p
-                class="font-body-sm text-body-sm text-secondary"
-            >
-                2 newly registered stores awaiting geofence approval
-                within 1.2km of Elena Rostova.
-            </p>
-        </div>
-
-        <button
-            type="button"
-            class="rounded bg-surface-container-lowest px-space-md py-2 font-title-md text-primary shadow-sm"
-            @click="alertVisible = false"
+        <article
+            class="rounded-lg bg-surface-container-lowest p-space-lg shadow-sm"
         >
-            Dismiss Flag
-        </button>
-    </div>
-
-    <div
-        class="overflow-hidden rounded-lg bg-surface-container-lowest shadow-sm"
-    >
-        <div class="p-space-lg">
-            <h2
-                class="font-headline-sm text-headline-sm font-semibold text-primary"
-            >
-                Real-Time Field Telemetry Feed
-            </h2>
-
-            <p
-                class="font-body-sm text-body-sm text-secondary"
-            >
-                Live validation feed cross-referencing GPS pings against
-                Odoo ERP records
-            </p>
-        </div>
-
-        <div class="w-full overflow-x-auto">
-            <table class="w-full text-left">
-                <thead>
-                    <tr
-                        class="h-10 bg-primary font-label-caps text-label-caps text-on-primary"
+            <div class="flex items-center justify-between gap-4">
+                <div>
+                    <p
+                        class="text-xs font-semibold uppercase tracking-[0.12em] text-on-surface-variant"
                     >
-                        <th class="px-space-base">
-                            Sales Agent
-                        </th>
+                        Live Activity
+                    </p>
 
-                        <th class="px-space-base">
-                            Target Retail Store
-                        </th>
+                    <h2 class="mt-1 text-lg font-bold text-on-surface">
+                        Telemetry Feed
+                    </h2>
+                </div>
 
-                        <th class="px-space-base">
-                            Timestamp
-                        </th>
+                <span
+                    class="rounded-full bg-surface-container px-3 py-1.5 text-xs font-semibold text-on-surface-variant"
+                >
+                    {{ telemetryItems.length }} Events
+                </span>
+            </div>
 
-                        <th class="px-space-base">
-                            Geofence Status
-                        </th>
+            <div
+                v-if="telemetryItems.length"
+                class="mt-5 divide-y divide-outline-variant"
+            >
+                <div
+                    v-for="(item, index) in telemetryItems"
+                    :key="item.id ?? index"
+                    class="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
+                >
+                    <span
+                        class="h-2.5 w-2.5 shrink-0 rounded-full"
+                        :class="getTelemetryStatusClass(item.status)"
+                    ></span>
 
-                        <th class="px-space-base">
-                            Evidence
-                        </th>
-                    </tr>
-                </thead>
+                    <div class="min-w-0 flex-1">
+                        <p class="truncate text-sm font-medium text-on-surface">
+                            {{
+                                item.message ||
+                                item.title ||
+                                item.activity ||
+                                "Activity update"
+                            }}
+                        </p>
 
-                <tbody>
-                    <tr
-                        v-for="item in telemetry"
-                        :key="item.id"
-                        class="h-12 hover:bg-surface-container-low"
-                    >
-                        <td class="px-space-base">
-                            <div
-                                class="flex items-center gap-space-sm"
-                            >
-                                <img
-                                    :src="item.avatar"
-                                    :alt="item.name"
-                                    class="h-7 w-7 rounded-full object-cover"
-                                />
-
-                                <div>
-                                    <span
-                                        class="block text-xs font-semibold text-primary"
-                                    >
-                                        {{ item.name }}
-                                    </span>
-
-                                    <span
-                                        class="font-code-metric text-[10px] text-secondary"
-                                    >
-                                        {{ item.id }}
-                                    </span>
-                                </div>
-                            </div>
-                        </td>
-
-                        <td class="px-space-base">
-                            <span
-                                class="block text-xs font-medium text-primary"
-                            >
-                                {{ item.store }}
-                            </span>
-
-                            <span
-                                class="text-[11px] text-secondary"
-                            >
-                                {{ item.location }}
-                            </span>
-                        </td>
-
-                        <td
-                            class="px-space-base font-code-metric text-xs text-primary"
+                        <p
+                            v-if="item.description"
+                            class="mt-0.5 truncate text-xs text-on-surface-variant"
                         >
-                            {{ item.time }}
-                        </td>
+                            {{ item.description }}
+                        </p>
+                    </div>
 
-                        <td class="px-space-base">
-                            <span
-                                class="rounded-full px-2 py-0.5 text-[11px]"
-                                :class="
-                                    item.status === 'valid'
-                                        ? 'bg-emerald-50 text-emerald-800'
-                                        : 'bg-orange-50 text-tertiary-container'
-                                "
-                            >
-                                {{ item.proximity }}
-                            </span>
-                        </td>
+                    <span
+                        v-if="item.time || item.created_at"
+                        class="shrink-0 text-xs text-on-surface-variant"
+                    >
+                        {{ item.time || item.created_at }}
+                    </span>
+                </div>
+            </div>
 
-                        <td class="px-space-base">
-                            <button
-                                type="button"
-                                class="inline-flex items-center gap-1 rounded bg-surface-container-low px-2 py-1 text-[11px] text-primary"
-                            >
-                                <span
-                                    class="material-symbols-outlined text-[14px]"
-                                >
-                                    {{ item.evidenceIcon }}
-                                </span>
+            <div
+                v-else
+                class="mt-5 rounded-lg bg-surface-container p-6 text-center"
+            >
+                <p class="text-sm font-semibold text-on-surface">
+                    Belum ada aktivitas
+                </p>
 
-                                {{ item.evidence }}
-                            </button>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-</section>
-
+                <p class="mt-1 text-xs text-on-surface-variant">
+                    Aktivitas terbaru akan tampil di sini.
+                </p>
+            </div>
+        </article>
+    </section>
 </template>
