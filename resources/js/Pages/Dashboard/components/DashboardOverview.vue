@@ -81,19 +81,6 @@ const getBarHeight = (orders) => {
 |--------------------------------------------------------------------------
 | Area dengan Order Tertinggi
 |--------------------------------------------------------------------------
-|
-| Backend mengirim:
-|
-| {
-|     name: "Bekasi",
-|     reps: 5,
-|     visited: 32,
-|     total: 80,
-|     percentage: 40
-| }
-|
-| "visited" = toko yang memiliki VisitReport dengan activity "Order".
-|
 */
 
 const sortedStores = computed(() => {

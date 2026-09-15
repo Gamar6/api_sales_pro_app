@@ -3,13 +3,14 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\User;
 use App\Models\StoreVisit;
+use App\Models\User;
 use App\Models\VisitReport;
 use App\Services\OdooService;
 use Carbon\Carbon;
 use DateTimeInterface;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
@@ -18,6 +19,9 @@ use Rap2hpoutre\FastExcel\FastExcel;
 
 class DashboardController extends Controller
 {
+    /**
+     * Dashboard utama.
+     */
     public function index(
         Request $request,
         OdooService $odooService
@@ -26,17 +30,25 @@ class DashboardController extends Controller
         |--------------------------------------------------------------------------
         | Dashboard Filter
         |--------------------------------------------------------------------------
+        |
+        | Default:
+        |   All Time
+        |
+        | Optional:
+        |   ?date_from=2026-09-01&date_to=2026-09-15
+        |
         */
 
-        $selectedMonth = (int) $request->input(
-            'month',
-            now()->month
-        );
+        $dateFrom = $request->input('date_from');
+        $dateTo = $request->input('date_to');
 
-        $selectedYear = (int) $request->input(
-            'year',
-            now()->year
-        );
+        $dateFrom = $dateFrom
+            ? Carbon::parse($dateFrom)->startOfDay()
+            : null;
+
+        $dateTo = $dateTo
+            ? Carbon::parse($dateTo)->endOfDay()
+            : null;
 
         /*
         |--------------------------------------------------------------------------
@@ -85,94 +97,193 @@ class DashboardController extends Controller
 
         /*
         |--------------------------------------------------------------------------
-        | Visit Reports - Order
+        | Latest Retention Snapshot
         |--------------------------------------------------------------------------
         |
-        | Ambil hanya laporan yang memiliki aktivitas "Order"
-        | pada bulan/tahun yang sedang dipilih.
+        | Snapshot Excel adalah MASTER POPULATION toko.
+        |
+        | Artinya:
+        |
+        |   totalStores
+        |       =
+        |   seluruh toko yang ada di snapshot
+        |
+        | Kota juga mengikuti snapshot Excel.
         |
         */
 
-        $visitReports = VisitReport::query()
-            ->whereJsonContains('activities', 'Order')
-            ->whereHas('visit', function ($query) use (
-                $selectedMonth,
-                $selectedYear
-            ) {
-                $query
-                    ->whereYear(
-                        'visit_date',
-                        $selectedYear
-                    )
-                    ->whereMonth(
-                        'visit_date',
-                        $selectedMonth
-                    );
-            })
-            ->with('visit')
-            ->get()
-            ->groupBy(
-                fn ($report) => $report->visit?->sales_id
-            );
+        $stores = $this->loadRetentionSnapshot(
+            $odooService
+        );
 
         /*
         |--------------------------------------------------------------------------
-        | Sales Order Chart
+        | Order Visit Reports
         |--------------------------------------------------------------------------
+        |
+        | Rule:
+        |
+        |   visit_reports.activities contains "Order"
+        |
+        | Satu store bisa mempunyai beberapa Order.
+        |
+        | Untuk metric utama:
+        |
+        |   unique store = dihitung 1 kali
+        |
+        | Untuk metric sekunder:
+        |
+        |   order_events = jumlah event Order sebenarnya
+        |
         */
 
-        $salesOrderChart = User::query()
-            ->where('role', 'sales')
-            ->get()
-            ->map(function ($user) use ($visitReports) {
-                $reports = $visitReports->get(
-                    $user->id,
-                    collect()
-                );
+        $orderVisitReports = $this->getOrderVisitReports(
+            $dateFrom,
+            $dateTo
+        );
 
-                $weeklyData = [
-                    'week_1' => 0,
-                    'week_2' => 0,
-                    'week_3' => 0,
-                    'week_4' => 0,
-                    'week_5' => 0,
-                ];
+        /*
+        |--------------------------------------------------------------------------
+        | Odoo Partner Data
+        |--------------------------------------------------------------------------
+        |
+        | Ambil partner Odoo berdasarkan partner yang ditemukan
+        | dari StoreVisit.
+        |
+        | Odoo digunakan sebagai sumber data partner/enrichment.
+        |
+        | Kota untuk performance area tetap menggunakan snapshot
+        | karena snapshot adalah master population.
+        |
+        */
 
-                foreach ($reports as $report) {
-                    if ($report->visit?->visit_date) {
-                        $visitDate = Carbon::parse(
-                            $report->visit->visit_date
-                        );
-
-                        $weekNumber = $visitDate->weekOfMonth;
-                        $key = "week_{$weekNumber}";
-
-                        if (isset($weeklyData[$key])) {
-                            $weeklyData[$key]++;
-                        }
-                    }
-                }
-
-                return [
-                    'salesId' => $user->id,
-                    'name'    => $user->name ?? 'Unknown Sales',
-                    'orders'  => $reports->count(),
-                    'weekly'  => $weeklyData,
-                ];
-            })
-            ->sortByDesc('orders')
+        $orderedPartnerIds = $orderVisitReports
+            ->map(fn ($report) => $report->visit?->odoo_partner_id)
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
             ->values();
 
+        $odooPartners = $this->loadOdooPartners(
+            $odooService,
+            $orderedPartnerIds->all()
+        );
+
         /*
         |--------------------------------------------------------------------------
-        | Load Latest Retention Snapshot
+        | Sales Order Performance
+        |--------------------------------------------------------------------------
+        */
+
+        $salesOrderChart = $this->buildSalesOrderChart(
+            $orderVisitReports
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Area / City Order Performance
         |--------------------------------------------------------------------------
         |
-        | Sumber toko berasal dari file Excel hasil Python.
-        | Tidak mengubah atau menulis ulang logic Python.
+        | Denominator:
+        |   SEMUA toko di snapshot Excel terbaru.
+        |
+        | Numerator:
+        |   UNIQUE toko yang melakukan Order.
+        |
+        | Secondary:
+        |   jumlah raw order event.
+        |
+        | Reps:
+        |   UNIQUE sales yang melakukan Order.
         |
         */
 
+        $areaOrderPerformance = $this->buildAreaOrderPerformance(
+            $stores,
+            $orderVisitReports,
+            $odooPartners
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Dashboard Response
+        |--------------------------------------------------------------------------
+        */
+
+        return Inertia::render(
+            'Dashboard/Main_dashboard',
+            [
+                'dashboardStats' => [
+                    'totalCheckInsToday' => $totalCheckInsToday,
+                    'averageVisitDuration' => $averageVisitDuration,
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Global Order Summary
+                    |--------------------------------------------------------------------------
+                    */
+
+                    'uniqueOrderStores' => $orderVisitReports
+                        ->map(
+                            fn ($report) =>
+                                $report->visit?->odoo_partner_id
+                        )
+                        ->filter()
+                        ->unique()
+                        ->count(),
+
+                    'orderEvents' => $orderVisitReports->count(),
+
+                    'totalSnapshotStores' => $stores->count(),
+                ],
+
+                'salesOrderChart' => $salesOrderChart,
+
+                /*
+                |--------------------------------------------------------------------------
+                | Area Performance
+                |--------------------------------------------------------------------------
+                */
+
+                'stores' => $areaOrderPerformance,
+
+                /*
+                |--------------------------------------------------------------------------
+                | Filters
+                |--------------------------------------------------------------------------
+                |
+                | Tetap kirim month/year untuk kompatibilitas
+                | frontend lama, tetapi filter utama sekarang
+                | date_from/date_to.
+                |
+                */
+
+                'filters' => [
+                    'date_from' => $dateFrom?->format('Y-m-d'),
+                    'date_to' => $dateTo?->format('Y-m-d'),
+
+                    'month' => $dateFrom
+                        ? $dateFrom->month
+                        : null,
+
+                    'year' => $dateFrom
+                        ? $dateFrom->year
+                        : null,
+                ],
+            ]
+        );
+    }
+
+    /**
+     * =========================================================================
+     * LOAD RETENTION SNAPSHOT
+     * =========================================================================
+     *
+     * Snapshot Excel terbaru adalah master population.
+     */
+    private function loadRetentionSnapshot(
+        OdooService $odooService
+    ): Collection {
         $folderPath = storage_path(
             'app/private/retensi'
         );
@@ -181,20 +292,40 @@ class DashboardController extends Controller
             "{$folderPath}/*_retensi_jabodetabek.xlsx"
         );
 
-        $stores = collect();
+        if (empty($files)) {
+            return collect();
+        }
 
-        if (!empty($files)) {
-            rsort($files);
+        /*
+        |--------------------------------------------------------------------------
+        | Ambil file terbaru berdasarkan modified time
+        |--------------------------------------------------------------------------
+        */
 
-            $latestFile = $files[0];
+        usort(
+            $files,
+            function ($a, $b) {
+                return File::lastModified($b)
+                    <=> File::lastModified($a);
+            }
+        );
 
-            $cacheKey = 'dashboard:retention:stores:' . hash(
-                'sha256',
-                basename($latestFile) . ':' .
-                File::lastModified($latestFile)
-            );
+        $latestFile = $files[0];
 
-            $retentionData = Cache::remember(
+        /*
+        |--------------------------------------------------------------------------
+        | Cache Snapshot
+        |--------------------------------------------------------------------------
+        */
+
+        $cacheKey = 'dashboard:retention:stores:' . hash(
+            'sha256',
+            basename($latestFile) . ':' .
+            File::lastModified($latestFile)
+        );
+
+        return collect(
+            Cache::remember(
                 $cacheKey,
                 now()->addMinutes(15),
                 function () use (
@@ -210,50 +341,71 @@ class DashboardController extends Controller
 
                     /*
                     |--------------------------------------------------------------------------
-                    | Partner IDs dari Excel
+                    | Partner IDs dari snapshot
                     |--------------------------------------------------------------------------
                     */
 
                     $partnerIds = $excelData
                         ->pluck('partner_id')
                         ->filter()
-                        ->map(fn ($id) => (int) $id)
+                        ->map(
+                            fn ($id) => (int) $id
+                        )
                         ->unique()
                         ->values()
                         ->toArray();
 
                     /*
                     |--------------------------------------------------------------------------
-                    | Lengkapi data dari Odoo
+                    | Odoo Partner
                     |--------------------------------------------------------------------------
+                    |
+                    | Batch request agar tidak melakukan query
+                    | satu partner satu request.
+                    |
                     */
 
-                    $odooStoresRaw = $odooService->execute_kw(
-                        'res.partner',
-                        'search_read',
-                        [
-                            [
-                                [
-                                    'id',
-                                    'in',
-                                    $partnerIds
-                                ]
-                            ]
-                        ],
-                        [
-                            'fields' => [
-                                'id',
-                                'street',
-                                'partner_latitude',
-                                'partner_longitude',
-                                'email',
-                            ]
-                        ]
-                    );
+                    $odooStores = collect();
 
-                    $odooStores = collect(
-                        $odooStoresRaw
-                    )->keyBy('id');
+                    foreach (
+                        array_chunk($partnerIds, 500)
+                        as $partnerChunk
+                    ) {
+                        $odooStoresRaw = $odooService
+                            ->execute_kw(
+                                'res.partner',
+                                'search_read',
+                                [
+                                    [
+                                        [
+                                            'id',
+                                            'in',
+                                            $partnerChunk
+                                        ]
+                                    ]
+                                ],
+                                [
+                                    'fields' => [
+                                        'id',
+                                        'name',
+                                        'display_name',
+                                        'street',
+                                        'partner_latitude',
+                                        'partner_longitude',
+                                        'email',
+                                    ]
+                                ]
+                            );
+
+                        $odooStores = $odooStores->merge(
+                            collect($odooStoresRaw)
+                        );
+                    }
+
+                    $odooStores = $odooStores->keyBy(
+                        fn ($store) =>
+                            (int) $store['id']
+                    );
 
                     /*
                     |--------------------------------------------------------------------------
@@ -262,311 +414,864 @@ class DashboardController extends Controller
                     */
 
                     return $excelData
-                        ->map(function (array $row) use (
-                            $odooStores
-                        ) {
-                            $partnerId = (int) (
-                                $row['partner_id'] ?? 0
-                            );
-
-                            $storeDetail = $odooStores->get(
-                                $partnerId
-                            );
-
-                            $lastOrderDate = null;
-
-                            if (
-                                !empty(
-                                    $row['last_order_date']
-                                )
+                        ->map(
+                            function (array $row) use (
+                                $odooStores
                             ) {
-                                if (
-                                    $row['last_order_date']
-                                    instanceof DateTimeInterface
-                                ) {
-                                    $lastOrderDate =
-                                        $row['last_order_date']
-                                            ->format('Y-m-d');
-                                } else {
-                                    $lastOrderDate = substr(
-                                        (string) $row[
-                                            'last_order_date'
-                                        ],
-                                        0,
-                                        10
-                                    );
+                                $partnerId = (int) (
+                                    $row['partner_id'] ?? 0
+                                );
+
+                                if ($partnerId <= 0) {
+                                    return null;
                                 }
-                            }
 
-                            return [
-                                'partner_id' =>
-                                    $partnerId,
+                                $storeDetail =
+                                    $odooStores->get(
+                                        $partnerId
+                                    );
 
-                                'partner_name' =>
-                                    (string) (
-                                        $row[
-                                            'partner_name'
-                                        ] ?? ''
-                                    ),
+                                /*
+                                |--------------------------------------------------------------------------
+                                | Normalize last order date
+                                |--------------------------------------------------------------------------
+                                */
 
-                                'kota' =>
-                                    trim(
+                                $lastOrderDate = null;
+
+                                if (
+                                    !empty(
+                                        $row['last_order_date']
+                                    )
+                                ) {
+                                    if (
+                                        $row['last_order_date']
+                                        instanceof DateTimeInterface
+                                    ) {
+                                        $lastOrderDate =
+                                            $row[
+                                                'last_order_date'
+                                            ]->format(
+                                                'Y-m-d'
+                                            );
+                                    } else {
+                                        $lastOrderDate =
+                                            substr(
+                                                (string) $row[
+                                                    'last_order_date'
+                                                ],
+                                                0,
+                                                10
+                                            );
+                                    }
+                                }
+
+                                return [
+                                    'partner_id' =>
+                                        $partnerId,
+
+                                    'partner_name' =>
                                         (string) (
-                                            $row['kota']
-                                            ?? ''
+                                            $row[
+                                                'partner_name'
+                                            ] ?? ''
+                                        ),
+
+                                    /*
+                                    |--------------------------------------------------------------------------
+                                    | KOTA MASTER
+                                    |--------------------------------------------------------------------------
+                                    */
+
+                                    'kota' =>
+                                        trim(
+                                            (string) (
+                                                $row['kota']
+                                                ?? ''
+                                            )
+                                        ),
+
+                                    'sales_name' =>
+                                        (string) (
+                                            $row[
+                                                'sales_name'
+                                            ] ?? 'Unassigned'
+                                        ),
+
+                                    'phone' =>
+                                        (string) (
+                                            $row[
+                                                'phone_clean'
+                                            ] ?? ''
+                                        ),
+
+                                    'last_order_date' =>
+                                        $lastOrderDate,
+
+                                    'days_since' =>
+                                        (int) (
+                                            $row[
+                                                'days_since'
+                                            ] ?? 0
+                                        ),
+
+                                    'weeks_since' =>
+                                        (int) (
+                                            $row[
+                                                'weeks_since'
+                                            ] ?? 0
+                                        ),
+
+                                    'retensi_status' =>
+                                        (string) (
+                                            $row[
+                                                'retensi_status'
+                                            ] ?? 'DEAD ZONE'
+                                        ),
+
+                                    'aktif_group' =>
+                                        (string) (
+                                            $row[
+                                                'aktif_group'
+                                            ] ?? 'NON_AKTIF'
+                                        ),
+
+                                    'avg_retensi_weeks' =>
+                                        (float) (
+                                            $row[
+                                                'avg_retensi_weeks'
+                                            ] ?? 0
+                                        ),
+
+                                    'gap_vs_average' =>
+                                        (float) (
+                                            $row[
+                                                'gap_vs_average'
+                                            ] ?? 0
+                                        ),
+
+                                    'total_sales' =>
+                                        (float) (
+                                            $row[
+                                                'total_sales_2024_plus'
+                                            ] ?? 0
+                                        ),
+
+                                    'priority' =>
+                                        (int) (
+                                            $row[
+                                                'priority'
+                                            ] ?? 99
+                                        ),
+
+                                    /*
+                                    |--------------------------------------------------------------------------
+                                    | Odoo enrichment
+                                    |--------------------------------------------------------------------------
+                                    */
+
+                                    'alamat' =>
+                                        $storeDetail[
+                                            'street'
+                                        ] ?? null,
+
+                                    'latitude' =>
+                                        isset(
+                                            $storeDetail[
+                                                'partner_latitude'
+                                            ]
                                         )
-                                    ),
-
-                                'sales_name' =>
-                                    (string) (
-                                        $row[
-                                            'sales_name'
-                                        ] ?? 'Unassigned'
-                                    ),
-
-                                'retensi_status' =>
-                                    (string) (
-                                        $row[
-                                            'retensi_status'
-                                        ] ?? 'DEAD ZONE'
-                                    ),
-
-                                'alamat' =>
-                                    $storeDetail['street']
-                                    ?? null,
-
-                                'latitude' =>
-                                    isset(
+                                        &&
                                         $storeDetail[
                                             'partner_latitude'
-                                        ]
-                                    )
-                                    &&
-                                    $storeDetail[
-                                        'partner_latitude'
-                                    ] !== false
-                                        ? (float) $storeDetail[
-                                            'partner_latitude'
-                                        ]
-                                        : null,
+                                        ] !== false
+                                            ? (float)
+                                                $storeDetail[
+                                                    'partner_latitude'
+                                                ]
+                                            : null,
 
-                                'longitude' =>
-                                    isset(
+                                    'longitude' =>
+                                        isset(
+                                            $storeDetail[
+                                                'partner_longitude'
+                                            ]
+                                        )
+                                        &&
                                         $storeDetail[
                                             'partner_longitude'
-                                        ]
-                                    )
-                                    &&
-                                    $storeDetail[
-                                        'partner_longitude'
-                                    ] !== false
-                                        ? (float) $storeDetail[
-                                            'partner_longitude'
-                                        ]
-                                        : null,
+                                        ] !== false
+                                            ? (float)
+                                                $storeDetail[
+                                                    'partner_longitude'
+                                                ]
+                                            : null,
 
-                                'email' =>
-                                    $storeDetail['email']
-                                    ?? null,
-                            ];
-                        })
+                                    'email' =>
+                                        $storeDetail[
+                                            'email'
+                                        ] ?? null,
+                                ];
+                            }
+                        )
+                        ->filter()
                         ->values()
                         ->all();
                 }
-            );
+            )
+        )
+            /*
+            |--------------------------------------------------------------------------
+            | Snapshot validation
+            |--------------------------------------------------------------------------
+            */
 
-            $stores = collect($retentionData)
-                ->filter(
-                    fn ($store) =>
-                        !empty($store['partner_id'])
-                        &&
-                        !empty($store['kota'])
-                )
-                ->unique('partner_id')
-                ->values();
-        }
+            ->filter(
+                fn ($store) =>
+                    !empty($store['partner_id'])
+                    &&
+                    !empty($store['kota'])
+            )
 
-        /*
-        |--------------------------------------------------------------------------
-        | Order Visits
-        |--------------------------------------------------------------------------
-        |
-        | Sekarang ambil seluruh StoreVisit yang mempunyai
-        | VisitReport dengan aktivitas "Order".
-        |
-        */
+            /*
+            |--------------------------------------------------------------------------
+            | Satu partner hanya satu kali
+            |--------------------------------------------------------------------------
+            */
 
-        $orderVisitReports = VisitReport::query()
+            ->unique('partner_id')
+            ->values();
+    }
+
+    /**
+     * =========================================================================
+     * GET ORDER VISIT REPORTS
+     * =========================================================================
+     */
+    private function getOrderVisitReports(
+        ?Carbon $dateFrom,
+        ?Carbon $dateTo
+    ): Collection {
+        $query = VisitReport::query()
+            /*
+            |--------------------------------------------------------------------------
+            | activities adalah JSON array
+            |--------------------------------------------------------------------------
+            |
+            | Contoh:
+            |
+            | ["Visit", "Order", "Payment"]
+            |
+            | Selama mengandung "Order", report dihitung.
+            |
+            */
             ->whereJsonContains(
                 'activities',
                 'Order'
             )
-            ->whereHas('visit', function ($query) use (
-                $selectedMonth,
-                $selectedYear
-            ) {
-                $query
-                    ->whereYear(
-                        'visit_date',
-                        $selectedYear
+
+            ->whereHas(
+                'visit',
+                function ($query) use (
+                    $dateFrom,
+                    $dateTo
+                ) {
+                    if ($dateFrom) {
+                        $query->where(
+                            'visit_date',
+                            '>=',
+                            $dateFrom
+                        );
+                    }
+
+                    if ($dateTo) {
+                        $query->where(
+                            'visit_date',
+                            '<=',
+                            $dateTo
+                        );
+                    }
+                }
+            )
+
+            ->with(
+                [
+                    'visit' => function ($query) {
+                        $query->select(
+                            [
+                                'id',
+                                'odoo_partner_id',
+                                'sales_id',
+                                'visit_date',
+                            ]
+                        );
+                    },
+                ]
+            );
+
+        return $query
+            ->get()
+            ->filter(
+                fn ($report) =>
+                    $report->visit
+                    &&
+                    !empty(
+                        $report->visit->odoo_partner_id
                     )
-                    ->whereMonth(
-                        'visit_date',
-                        $selectedMonth
-                    );
-            })
-            ->with([
-                'visit' => function ($query) {
-                    $query->select([
+            )
+            ->values();
+    }
+
+    /**
+     * =========================================================================
+     * LOAD ODOO PARTNERS
+     * =========================================================================
+     *
+     * Odoo tetap diakses menggunakan OdooService XML-RPC.
+     */
+    private function loadOdooPartners(
+        OdooService $odooService,
+        array $partnerIds
+    ): Collection {
+        if (empty($partnerIds)) {
+            return collect();
+        }
+
+        $partners = collect();
+
+        foreach (
+            array_chunk(
+                array_values(
+                    array_unique(
+                        array_map(
+                            'intval',
+                            $partnerIds
+                        )
+                    )
+                ),
+                500
+            ) as $partnerChunk
+        ) {
+            $result = $odooService->execute_kw(
+                'res.partner',
+                'search_read',
+                [
+                    [
+                        [
+                            'id',
+                            'in',
+                            $partnerChunk
+                        ]
+                    ]
+                ],
+                [
+                    'fields' => [
                         'id',
-                        'odoo_partner_id',
-                        'sales_id',
-                        'visit_date',
-                    ]);
-                },
-            ])
+                        'name',
+                        'display_name',
+                        'street',
+                        'city',
+                        'state_id',
+                        'country_id',
+                        'phone',
+                        'mobile',
+                        'email',
+                    ],
+                ]
+            );
+
+            $partners = $partners->merge(
+                collect($result)
+            );
+        }
+
+        return $partners->keyBy(
+            fn ($partner) =>
+                (int) $partner['id']
+        );
+    }
+
+    /**
+     * =========================================================================
+     * SALES ORDER CHART
+     * =========================================================================
+     *
+     * Metric utama:
+     *   orders = unique stores
+     *
+     * Metric sekunder:
+     *   orderEvents = raw order events
+     */
+    private function buildSalesOrderChart(
+        Collection $orderVisitReports
+    ): Collection {
+        $salesUsers = User::query()
+            ->where('role', 'sales')
             ->get();
+
+        return $salesUsers
+            ->map(
+                function ($user) use (
+                    $orderVisitReports
+                ) {
+                    $reports = $orderVisitReports
+                        ->filter(
+                            fn ($report) =>
+                                (int) (
+                                    $report->visit?->sales_id
+                                )
+                                ===
+                                (int) $user->id
+                        )
+                        ->values();
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Unique stores
+                    |--------------------------------------------------------------------------
+                    */
+
+                    $uniqueStoreIds = $reports
+                        ->map(
+                            fn ($report) =>
+                                $report->visit
+                                    ?->odoo_partner_id
+                        )
+                        ->filter()
+                        ->map(
+                            fn ($id) => (int) $id
+                        )
+                        ->unique()
+                        ->values();
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Weekly data
+                    |--------------------------------------------------------------------------
+                    |
+                    | Weekly menggunakan unique store per minggu.
+                    |
+                    | Jadi:
+                    |
+                    | Store A order minggu 1
+                    | Store A order minggu 2
+                    |
+                    | akan dihitung di masing-masing minggu.
+                    |
+                    */
+
+                    $weeklyData = [
+                        'week_1' => 0,
+                        'week_2' => 0,
+                        'week_3' => 0,
+                        'week_4' => 0,
+                        'week_5' => 0,
+                    ];
+
+                    $weeklyStoreIds = [
+                        'week_1' => collect(),
+                        'week_2' => collect(),
+                        'week_3' => collect(),
+                        'week_4' => collect(),
+                        'week_5' => collect(),
+                    ];
+
+                    foreach ($reports as $report) {
+                        $visit = $report->visit;
+
+                        if (!$visit?->visit_date) {
+                            continue;
+                        }
+
+                        $weekNumber = Carbon::parse(
+                            $visit->visit_date
+                        )->weekOfMonth;
+
+                        $key = "week_{$weekNumber}";
+
+                        if (
+                            !isset(
+                                $weeklyStoreIds[$key]
+                            )
+                        ) {
+                            continue;
+                        }
+
+                        $partnerId = $visit->odoo_partner_id;
+
+                        if ($partnerId) {
+                            $weeklyStoreIds[$key]->push(
+                                (int) $partnerId
+                            );
+                        }
+                    }
+
+                    foreach (
+                        $weeklyStoreIds
+                        as $week => $partnerIds
+                    ) {
+                        $weeklyData[$week] =
+                            $partnerIds
+                                ->unique()
+                                ->count();
+                    }
+
+                    return [
+                        'salesId' =>
+                            $user->id,
+
+                        'name' =>
+                            $user->name
+                            ?? 'Unknown Sales',
+
+                        /*
+                        |--------------------------------------------------------------------------
+                        | MAIN METRIC
+                        |--------------------------------------------------------------------------
+                        */
+
+                        'orders' =>
+                            $uniqueStoreIds->count(),
+
+                        /*
+                        |--------------------------------------------------------------------------
+                        | SECONDARY METRIC
+                        |--------------------------------------------------------------------------
+                        */
+
+                        'orderEvents' =>
+                            $reports->count(),
+
+                        'weekly' =>
+                            $weeklyData,
+                    ];
+                }
+            )
+            ->sortByDesc('orders')
+            ->values();
+    }
+
+    /**
+     * =========================================================================
+     * AREA ORDER PERFORMANCE
+     * =========================================================================
+     */
+    private function buildAreaOrderPerformance(
+        Collection $stores,
+        Collection $orderVisitReports,
+        Collection $odooPartners
+    ): Collection {
+        /*
+        |--------------------------------------------------------------------------
+        | Snapshot menjadi master partner → kota
+        |--------------------------------------------------------------------------
+        */
+
+        $snapshotByPartner = $stores
+            ->keyBy(
+                fn ($store) =>
+                    (int) $store['partner_id']
+            );
 
         /*
         |--------------------------------------------------------------------------
-        | Order Visits Indexed By Partner ID
+        | Order events dikelompokkan berdasarkan partner
         |--------------------------------------------------------------------------
-        |
-        | Satu toko bisa memiliki lebih dari satu VisitReport.
-        | Kita deduplicate berdasarkan odoo_partner_id.
-        |
         */
 
         $orderVisitsByPartner = $orderVisitReports
             ->filter(
                 fn ($report) =>
-                    $report->visit?->odoo_partner_id
+                    $report->visit
+                    &&
+                    !empty(
+                        $report->visit->odoo_partner_id
+                    )
             )
             ->groupBy(
                 fn ($report) =>
-                    $report->visit->odoo_partner_id
+                    (int) $report->visit->odoo_partner_id
             );
 
         /*
         |--------------------------------------------------------------------------
-        | Area / City Order Performance
+        | Hanya partner yang:
+        |
+        | 1. Ada di snapshot
+        | 2. Memiliki Order
+        |
+        | yang masuk numerator.
         |--------------------------------------------------------------------------
-        |
-        | Denominator:
-        |   Semua toko yang ada di kota tersebut.
-        |
-        | Numerator:
-        |   Toko unik yang memiliki aktivitas "Order"
-        |   pada periode yang dipilih.
-        |
-        | Reps:
-        |   Sales unik yang melakukan Order di kota tersebut.
-        |
         */
 
-        $areaOrderPerformance = $stores
-            ->groupBy('kota')
-            ->map(function ($cityStores, $city) use (
-                $orderVisitsByPartner
-            ) {
-                /*
-                |--------------------------------------------------------------------------
-                | Semua toko di kota
-                |--------------------------------------------------------------------------
-                */
-
-                $allPartnerIds = $cityStores
-                    ->pluck('partner_id')
-                    ->map(fn ($id) => (int) $id)
-                    ->unique()
-                    ->values();
-
-                $totalStores = $allPartnerIds->count();
-
-                /*
-                |--------------------------------------------------------------------------
-                | Toko yang melakukan Order
-                |--------------------------------------------------------------------------
-                */
-
-                $visitedPartnerIds = $allPartnerIds
-                    ->filter(
-                        fn ($partnerId) =>
-                            $orderVisitsByPartner->has(
-                                $partnerId
-                            )
+        $orderedSnapshotPartners = $orderVisitsByPartner
+            ->filter(
+                fn ($reports, $partnerId) =>
+                    $snapshotByPartner->has(
+                        (int) $partnerId
                     )
-                    ->values();
-
-                $visitedStores = $visitedPartnerIds->count();
-
-                /*
-                |--------------------------------------------------------------------------
-                | Sales / Reps unik
-                |--------------------------------------------------------------------------
-                */
-
-                $salesIds = $visitedPartnerIds
-                    ->flatMap(
-                        fn ($partnerId) =>
-                            $orderVisitsByPartner
-                                ->get($partnerId, collect())
-                                ->pluck(
-                                    'visit.sales_id'
-                                )
-                        )
-                    ->filter()
-                    ->unique()
-                    ->values();
-
-                $reps = $salesIds->count();
-
-                /*
-                |--------------------------------------------------------------------------
-                | Completion Percentage
-                |--------------------------------------------------------------------------
-                */
-
-                $percentage = $totalStores > 0
-                    ? round(
-                        (
-                            $visitedStores
-                            / $totalStores
-                        ) * 100
-                    )
-                    : 0;
-
-                return [
-                    'name'       => $city,
-                    'reps'       => $reps,
-                    'visited'    => $visitedStores,
-                    'total'      => $totalStores,
-                    'percentage' => $percentage,
-                ];
-            })
-            ->sortByDesc('visited')
-            ->values();
+            );
 
         /*
         |--------------------------------------------------------------------------
-        | Inertia Response
+        | Group semua snapshot stores berdasarkan kota
         |--------------------------------------------------------------------------
         */
 
-        return Inertia::render('Dashboard/Main_dashboard', [
-            'dashboardStats' => [
-                'totalCheckInsToday' => $totalCheckInsToday,
-                'averageVisitDuration' => $averageVisitDuration,
-            ],
+        return $stores
+            ->groupBy(
+                fn ($store) =>
+                    trim(
+                        (string) (
+                            $store['kota']
+                            ?? ''
+                        )
+                    )
+            )
+            ->filter(
+                fn ($cityStores, $city) =>
+                    $city !== ''
+            )
+            ->map(
+                function (
+                    Collection $cityStores,
+                    $city
+                ) use (
+                    $orderedSnapshotPartners,
+                    $orderVisitsByPartner,
+                    $odooPartners
+                ) {
+                    /*
+                    |--------------------------------------------------------------------------
+                    | ALL STORES
+                    |--------------------------------------------------------------------------
+                    |
+                    | Denominator.
+                    |--------------------------------------------------------------------------
+                    */
 
-            'salesOrderChart' => $salesOrderChart,
+                    $allPartnerIds = $cityStores
+                        ->pluck('partner_id')
+                        ->map(
+                            fn ($id) => (int) $id
+                        )
+                        ->unique()
+                        ->values();
 
-            'stores' => $areaOrderPerformance,
+                    $totalStores =
+                        $allPartnerIds->count();
 
-            'filters' => [
-                'month' => $selectedMonth,
-                'year' => $selectedYear,
-            ],
-        ]);
+                    /*
+                    |--------------------------------------------------------------------------
+                    | UNIQUE ORDERED STORES
+                    |--------------------------------------------------------------------------
+                    |
+                    | Satu store order 5 kali:
+                    |
+                    | tetap dihitung 1.
+                    |--------------------------------------------------------------------------
+                    */
+
+                    $orderedPartnerIds = $allPartnerIds
+                        ->filter(
+                            fn ($partnerId) =>
+                                $orderedSnapshotPartners
+                                    ->has(
+                                        $partnerId
+                                    )
+                        )
+                        ->values();
+
+                    $uniqueOrders =
+                        $orderedPartnerIds->count();
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | RAW ORDER EVENTS
+                    |--------------------------------------------------------------------------
+                    |
+                    | Kalau Store A order 5 kali:
+                    |
+                    | order_events = 5
+                    |--------------------------------------------------------------------------
+                    */
+
+                    $orderEvents = $orderedPartnerIds
+                        ->sum(
+                            fn ($partnerId) =>
+                                $orderVisitsByPartner
+                                    ->get(
+                                        $partnerId,
+                                        collect()
+                                    )
+                                    ->count()
+                        );
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | UNIQUE SALES / REPS
+                    |--------------------------------------------------------------------------
+                    */
+
+                    $salesIds = $orderedPartnerIds
+                        ->flatMap(
+                            function ($partnerId)
+                                use (
+                                    $orderVisitsByPartner
+                                ) {
+                                    return
+                                        $orderVisitsByPartner
+                                            ->get(
+                                                $partnerId,
+                                                collect()
+                                            )
+                                            ->map(
+                                                fn ($report) =>
+                                                    $report
+                                                        ->visit
+                                                        ?->sales_id
+                                            );
+                                }
+                        )
+                        ->filter()
+                        ->map(
+                            fn ($id) => (int) $id
+                        )
+                        ->unique()
+                        ->values();
+
+                    $reps = $salesIds->count();
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | PERFORMANCE
+                    |--------------------------------------------------------------------------
+                    */
+
+                    $percentage =
+                        $totalStores > 0
+                            ? round(
+                                (
+                                    $uniqueOrders
+                                    / $totalStores
+                                ) * 100
+                            )
+                            : 0;
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Odoo partner count
+                    |--------------------------------------------------------------------------
+                    |
+                    | Ini hanya enrichment/validasi.
+                    | Tidak menentukan denominator.
+                    |--------------------------------------------------------------------------
+                    */
+
+                    $odooMatchedOrders =
+                        $orderedPartnerIds
+                            ->filter(
+                                fn ($partnerId) =>
+                                    $odooPartners->has(
+                                        $partnerId
+                                    )
+                            )
+                            ->count();
+
+                    return [
+                        'name' =>
+                            $city,
+
+                        /*
+                        |--------------------------------------------------------------------------
+                        | Unique sales
+                        |--------------------------------------------------------------------------
+                        */
+
+                        'reps' =>
+                            $reps,
+
+                        /*
+                        |--------------------------------------------------------------------------
+                        | MAIN METRIC
+                        |--------------------------------------------------------------------------
+                        */
+
+                        'visited' =>
+                            $uniqueOrders,
+
+                        'unique_orders' =>
+                            $uniqueOrders,
+
+                        /*
+                        |--------------------------------------------------------------------------
+                        | SECONDARY METRIC
+                        |--------------------------------------------------------------------------
+                        */
+
+                        'order_events' =>
+                            $orderEvents,
+
+                        /*
+                        |--------------------------------------------------------------------------
+                        | ALL STORES IN SNAPSHOT
+                        |--------------------------------------------------------------------------
+                        */
+
+                        'total' =>
+                            $totalStores,
+
+                        /*
+                        |--------------------------------------------------------------------------
+                        | PERFORMANCE %
+                        |--------------------------------------------------------------------------
+                        */
+
+                        'percentage' =>
+                            $percentage,
+
+                        /*
+                        |--------------------------------------------------------------------------
+                        | Odoo enrichment info
+                        |--------------------------------------------------------------------------
+                        */
+
+                        'odoo_matched_orders' =>
+                            $odooMatchedOrders,
+                    ];
+                }
+            )
+            ->sort(
+                function ($a, $b) {
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Primary sort:
+                    | unique stores ordered
+                    |--------------------------------------------------------------------------
+                    */
+
+                    if (
+                        $a['visited']
+                        !==
+                        $b['visited']
+                    ) {
+                        return $b['visited']
+                            <=>
+                            $a['visited'];
+                    }
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Secondary sort:
+                    | percentage
+                    |--------------------------------------------------------------------------
+                    */
+
+                    return $b['percentage']
+                        <=>
+                        $a['percentage'];
+                }
+            )
+            ->values();
     }
 }

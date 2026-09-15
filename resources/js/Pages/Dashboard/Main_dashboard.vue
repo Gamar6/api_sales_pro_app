@@ -13,15 +13,53 @@ import {
     kpis as staticKpis,
     modules,
     products,
-    stores,
+    stores as staticStores,
     telemetryFeed,
 } from "./dashboardData";
+
+/*
+|--------------------------------------------------------------------------
+| Props dari Laravel / Inertia
+|--------------------------------------------------------------------------
+*/
 
 const props = defineProps({
     dashboardStats: {
         type: Object,
         required: true,
     },
+
+    /*
+    |--------------------------------------------------------------------------
+    | Dynamic area order performance
+    |--------------------------------------------------------------------------
+    |
+    | Dikirim dari DashboardController:
+    |
+    | [
+    |     {
+    |         name,
+    |         reps,
+    |         visited,
+    |         unique_orders,
+    |         order_events,
+    |         total,
+    |         percentage
+    |     }
+    | ]
+    |
+    */
+
+    stores: {
+        type: Array,
+        default: () => [],
+    },
+
+    /*
+    |--------------------------------------------------------------------------
+    | Dynamic sales order performance
+    |--------------------------------------------------------------------------
+    */
 
     salesOrderChart: {
         type: Array,
@@ -31,27 +69,52 @@ const props = defineProps({
 
 const activeModule = ref("dashboard");
 
+/*
+|--------------------------------------------------------------------------
+| Shift Goal
+|--------------------------------------------------------------------------
+*/
+
 const SHIFT_GOAL = 10;
 
+/*
+|--------------------------------------------------------------------------
+| KPI
+|--------------------------------------------------------------------------
+*/
+
 const kpis = computed(() => {
-    const totalCheckIns = props.dashboardStats.totalCheckInsToday ?? 0;
+    const totalCheckIns =
+        props.dashboardStats.totalCheckInsToday ?? 0;
 
-    const progress = Math.min((totalCheckIns / SHIFT_GOAL) * 100, 100);
+    const progress = Math.min(
+        (totalCheckIns / SHIFT_GOAL) * 100,
+        100,
+    );
 
-    const remaining = Math.max(SHIFT_GOAL - totalCheckIns, 0);
+    const remaining = Math.max(
+        SHIFT_GOAL - totalCheckIns,
+        0,
+    );
 
     const averageVisitDuration =
-        props.dashboardStats.averageVisitDuration ?? "0m 00s";
+        props.dashboardStats.averageVisitDuration ??
+        "0m 00s";
 
     return [
         {
             ...staticKpis[0],
 
-            value: totalCheckIns.toLocaleString(),
+            value:
+                totalCheckIns.toLocaleString(),
 
-            progress: Number(progress.toFixed(1)),
+            progress:
+                Number(
+                    progress.toFixed(1),
+                ),
 
-            badge: `SHIFT GOAL: ${SHIFT_GOAL}`,
+            badge:
+                `SHIFT GOAL: ${SHIFT_GOAL}`,
 
             detail:
                 remaining > 0
@@ -61,7 +124,9 @@ const kpis = computed(() => {
 
         {
             ...staticKpis[1],
-            value: averageVisitDuration,
+
+            value:
+                averageVisitDuration,
         },
     ];
 });
@@ -69,30 +134,71 @@ const kpis = computed(() => {
 
 <template>
     <AdminLayout>
-        <div class="min-h-screen bg-background text-on-surface">
+        <div
+            class="min-h-screen bg-background text-on-surface"
+        >
             <main class="w-full">
-                <div class="flex w-full flex-col">
-                    <div class="flex flex-col gap-space-xl p-space-xl">
+                <div
+                    class="flex w-full flex-col"
+                >
+                    <div
+                        class="flex flex-col gap-space-xl p-space-xl"
+                    >
+                        <!-- ================================================= -->
+                        <!-- HEADER -->
+                        <!-- ================================================= -->
+
                         <DashboardHeader />
 
-                        <DashboardKpiGrid :kpis="kpis" />
+                        <!-- ================================================= -->
+                        <!-- KPI -->
+                        <!-- ================================================= -->
+
+                        <DashboardKpiGrid
+                            :kpis="kpis"
+                        />
+
+                        <!-- ================================================= -->
+                        <!-- MODULE TABS -->
+                        <!-- ================================================= -->
 
                         <DashboardModuleTabs
                             v-model:active-module="activeModule"
                             :modules="modules"
                         />
 
+                        <!-- ================================================= -->
+                        <!-- DASHBOARD OVERVIEW -->
+                        <!-- ================================================= -->
+
                         <DashboardOverview
-                            v-if="activeModule === 'dashboard'"
-                            :dashboard-stats="props.dashboardStats"
-                            :stores="props.stores"
-                            :telemetry="telemetryFeed"
-                            :sales-order-chart="salesOrderChart"
+                            v-if="
+                                activeModule ===
+                                'dashboard'
+                            "
+                            :dashboard-stats="
+                                props.dashboardStats
+                            "
+                            :stores="
+                                props.stores
+                            "
+                            :telemetry="
+                                telemetryFeed
+                            "
+                            :sales-order-chart="
+                                props.salesOrderChart
+                            "
                         />
+
+                        <!-- ================================================= -->
+                        <!-- OTHER MODULES -->
+                        <!-- ================================================= -->
 
                         <DashboardModulePanels
                             v-else
-                            :active-module="activeModule"
+                            :active-module="
+                                activeModule
+                            "
                             :products="products"
                             :stores="staticStores"
                         />
@@ -102,3 +208,4 @@ const kpis = computed(() => {
         </div>
     </AdminLayout>
 </template>
+
