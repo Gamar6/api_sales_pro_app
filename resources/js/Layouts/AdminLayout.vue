@@ -1,9 +1,18 @@
 <script setup>
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { Link, usePage } from "@inertiajs/vue3";
-
 const page = usePage();
 const isSidebarOpen = ref(true);
+
+const currentUserRole = computed(() => page.props.auth?.user?.role);
+
+const canAccessMenu = (item) => {
+    if (!item.roles) {
+        return true;
+    }
+
+    return item.roles.includes(currentUserRole.value);
+};
 
 const navigation = [
     {
@@ -11,6 +20,8 @@ const navigation = [
         href: "/dashboard",
         icon: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6",
     },
+
+    //fitur sementara tidak ada
     // {
     //   name: 'Live Tracking',
     //   href: '/tracking',
@@ -38,7 +49,8 @@ const navigation = [
     },
     {
         name: "Manajemen User",
-        href: "/profile",
+        href: "/admin/users",
+        roles: ["admin", "superadmin"],
         icon: "M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z",
     },
 ];
@@ -101,7 +113,7 @@ const isCurrentRoute = (path) => page.url.startsWith(path);
             <!-- Navigation Menu Links -->
             <nav class="flex-1 py-4 px-3 space-y-1.5 overflow-y-auto">
                 <Link
-                    v-for="item in navigation"
+                    v-for="item in navigation.filter(canAccessMenu)"
                     :key="item.name"
                     :href="item.href"
                     :class="[
@@ -211,7 +223,7 @@ const isCurrentRoute = (path) => page.url.startsWith(path);
                                 }}
                             </p>
                             <p class="text-xs text-slate-500 mt-0.5">
-                                Super Admin
+                                {{ page.props.auth?.user?.role || "User" }}
                             </p>
                         </div>
                     </div>

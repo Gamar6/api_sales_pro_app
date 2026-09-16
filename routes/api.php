@@ -1,21 +1,28 @@
 <?php
 
 use App\Http\Controllers\AuthController;
-use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\StockController;
-use App\Http\Controllers\RetentionController;
-use App\Http\Controllers\StoreVisitController;
 use App\Http\Controllers\PasswordResetController;
+use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\RetentionController;
+use App\Http\Controllers\StockController;
+use App\Http\Controllers\StoreVisitController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login']);
 
-Route::post('/forgot-password', [PasswordResetController::class, 'sendResetLinkEmail']);
+Route::post(
+    '/forgot-password',
+    [PasswordResetController::class, 'sendResetLinkEmail']
+);
 
-Route::post('/reset-password', [PasswordResetController::class, 'reset']);
+Route::post(
+    '/reset-password',
+    [PasswordResetController::class, 'reset']
+);
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'active'])->group(function () {
+
     Route::get('/user', function (Request $request) {
         return response()->json([
             'status' => 'success',
@@ -23,16 +30,51 @@ Route::middleware('auth:sanctum')->group(function () {
         ]);
     });
 
-    Route::get('/retensi', [RetentionController::class, 'getRetentionStores']);
-    Route::get('/stocks', [StockController::class, 'index']);
-    Route::get('/visits/active', [StoreVisitController::class, 'getActiveVisit']);
-    Route::post('/change-password', [AuthController::class, 'changePassword']);
-    Route::post('/profile/photo', [ProfileController::class, 'updatePhoto']);
+    Route::get(
+        '/retensi',
+        [RetentionController::class, 'getRetentionStores']
+    );
+
+    Route::get(
+        '/stocks',
+        [StockController::class, 'index']
+    );
+
+    Route::get(
+        '/visits/active',
+        [StoreVisitController::class, 'getActiveVisit']
+    );
+
+    Route::post(
+        '/change-password',
+        [AuthController::class, 'changePassword']
+    );
+
+    Route::post(
+        '/profile/photo',
+        [ProfileController::class, 'updatePhoto']
+    );
 
     Route::prefix('store-visits')->group(function () {
-        Route::post('/claim', [StoreVisitController::class, 'claim']);
-        Route::post('/{visit}/submit-report', [StoreVisitController::class, 'submitReport']);
-        Route::post('/{visit}/cancel', [StoreVisitController::class, 'cancel']);
-        Route::get('/history', [StoreVisitController::class, 'history']);
+
+        Route::post(
+            '/claim',
+            [StoreVisitController::class, 'claim']
+        );
+
+        Route::post(
+            '/{visit}/submit-report',
+            [StoreVisitController::class, 'submitReport']
+        );
+
+        Route::post(
+            '/{visit}/cancel',
+            [StoreVisitController::class, 'cancel']
+        );
+
+        Route::get(
+            '/history',
+            [StoreVisitController::class, 'history']
+        );
     });
 });
