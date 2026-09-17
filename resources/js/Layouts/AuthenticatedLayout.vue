@@ -175,7 +175,7 @@ const showingNavigationDropdown = ref(false);
                                 Log Out
                             </ResponsiveNavLink>
                         </div>
-                    </div>
+                    </div>  
                 </div>
             </nav>
 

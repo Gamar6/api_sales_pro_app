@@ -1,6 +1,9 @@
 <script setup>
 import { computed, ref } from "vue";
 import { Link, usePage } from "@inertiajs/vue3";
+import Dropdown from "@/Components/Dropdown.vue";
+import DropdownLink from "@/Components/DropdownLink.vue";
+
 const page = usePage();
 const isSidebarOpen = ref(true);
 
@@ -201,32 +204,85 @@ const isCurrentRoute = (path) => page.url.startsWith(path);
                     </div>
 
                     <!-- User Profile Dropdown -->
-                    <div
-                        class="flex items-center gap-3 border-l border-slate-200 pl-4"
-                    >
-                        <div
-                            class="w-9 h-9 rounded-full bg-[#1C467F] text-white flex items-center justify-center font-bold text-sm shadow-sm"
-                        >
-                            {{
-                                page.props.auth?.user?.name
-                                    ? page.props.auth.user.name.charAt(0)
-                                    : "A"
-                            }}
-                        </div>
-                        <div class="hidden md:block text-left">
-                            <p
-                                class="text-sm font-semibold text-[#1C467F] leading-none"
+                    <Dropdown align="right" width="48">
+                        <!-- 1. TRIGGER: Tampilan kustom yang diklik untuk membuka dropdown -->
+                        <template #trigger>
+                            <button
+                                type="button"
+                                class="flex items-center gap-3 border-l border-slate-200 pl-4 focus:outline-none transition ease-in-out duration-150"
                             >
-                                {{
-                                    page.props.auth?.user?.name ||
-                                    "Administrator"
-                                }}
-                            </p>
-                            <p class="text-xs text-slate-500 mt-0.5">
-                                {{ page.props.auth?.user?.role || "User" }}
-                            </p>
-                        </div>
-                    </div>
+                                <!-- Avatar Inisial -->
+                                <div
+                                    class="w-9 h-9 rounded-full bg-[#1C467F] text-white flex items-center justify-center font-bold text-sm shadow-sm"
+                                >
+                                    {{
+                                        page.props.auth?.user?.name
+                                            ? page.props.auth.user.name.charAt(
+                                                  0,
+                                              )
+                                            : "A"
+                                    }}
+                                </div>
+
+                                <!-- Nama & Role -->
+                                <div class="hidden md:block text-left">
+                                    <p
+                                        class="text-sm font-semibold text-[#1C467F] leading-none"
+                                    >
+                                        {{
+                                            page.props.auth?.user?.name ||
+                                            "Administrator"
+                                        }}
+                                    </p>
+                                    <p class="text-xs text-slate-500 mt-0.5">
+                                        {{
+                                            page.props.auth?.user?.role ||
+                                            "User"
+                                        }}
+                                    </p>
+                                </div>
+
+                                <!-- Icon Panah kecil kebawah (Opsional, agar mirip bawaan Breeze) -->
+                                <svg
+                                    class="ms-1 h-4 w-4 fill-current text-slate-400 hidden md:block"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 20 20"
+                                >
+                                    <path
+                                        fill-rule="evenodd"
+                                        d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                                        clip-rule="evenodd"
+                                    />
+                                </svg>
+                            </button>
+                        </template>
+
+                        <!-- 2. CONTENT: Isi menu dropdown (Profile, Logout, dll) -->
+                        <template #content>
+                            <div class="px-4 py-2 border-b border-gray-100">
+                                <div class="text-sm font-medium text-gray-800">
+                                    {{ page.props.auth.user.name }}
+                                </div>
+                                <div
+                                    class="text-xs font-medium text-gray-500 truncate"
+                                >
+                                    {{ page.props.auth.user.email }}
+                                </div>
+                            </div>
+
+                            <DropdownLink :href="route('profile.edit')">
+                                Profile
+                            </DropdownLink>
+
+                            <DropdownLink
+                                :href="route('logout')"
+                                method="post"
+                                as="button"
+                            >
+                                Log Out
+                            </DropdownLink>
+                        </template>
+                    </Dropdown>
                 </div>
             </header>
 
