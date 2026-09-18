@@ -8,6 +8,7 @@ use App\Models\StoreVisit;
 use App\Models\User;
 use App\Models\VisitReport;
 use App\Services\Odoo\OdooClient;
+use App\Services\OdooService;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Exception;
@@ -19,10 +20,15 @@ use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
 class StoreVisitController extends Controller
 {
     protected OdooClient $odooClient;
+    protected OdooService $odooService;
 
-    public function __construct(OdooClient $odooClient)
-    {
+
+    public function __construct(
+    OdooClient $odooClient,
+    OdooService $odooService
+    ) {
         $this->odooClient = $odooClient;
+        $this->odooService = $odooService;
     }
 
     public function claim(ClaimStoreRequest $request)
@@ -36,8 +42,7 @@ class StoreVisitController extends Controller
 
         try {
             return DB::transaction(function () use ($salesId, $partnerId, $today, $now, $weekStart, $nextWeek) {
-                // Mengunci row sales agar dua klaim paralel dari sales yang sama
-                // tidak dapat membuat dua kunjungan aktif.
+
                 User::query()->whereKey($salesId)->lockForUpdate()->firstOrFail();
 
                 $salesActiveVisit = StoreVisit::query()
@@ -125,8 +130,49 @@ class StoreVisitController extends Controller
     {
         $salesId = $request->user()->id;
 
+        // =========================
+        // VALIDASI GPS
+        // =========================
+        if (
+            !$request->filled('sales_latitude') ||
+            !$request->filled('sales_longitude') ||
+            !$request->filled('sales_accuracy')
+        ) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Lokasi GPS wajib diambil sebelum mengirim laporan.',
+            ], 422);
+        }
+
+        $salesLatitude = (float) $request->input('sales_latitude');
+        $salesLongitude = (float) $request->input('sales_longitude');
+        $salesAccuracy = (float) $request->input('sales_accuracy');
+
+        if (
+            $salesLatitude < -90 ||
+            $salesLatitude > 90 ||
+            $salesLongitude < -180 ||
+            $salesLongitude > 180 ||
+            $salesAccuracy < 0
+        ) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Data koordinat GPS tidak valid.',
+            ], 422);
+        }
+
         try {
-            return DB::transaction(function () use ($request, $visitId, $salesId) {
+            return DB::transaction(function () use (
+                $request,
+                $visitId,
+                $salesId,
+                $salesLatitude,
+                $salesLongitude,
+                $salesAccuracy
+            ) {
+                // =========================
+                // AMBIL VISIT
+                // =========================
                 $visit = StoreVisit::where('id', $visitId)
                     ->where('sales_id', $salesId)
                     ->lockForUpdate()
@@ -134,7 +180,7 @@ class StoreVisitController extends Controller
 
                 if (!$visit) {
                     return response()->json([
-                        'status'  => 'error',
+                        'status' => 'error',
                         'message' => 'Data kunjungan tidak ditemukan atau Anda tidak memiliki akses.',
                     ], 404);
                 }
@@ -145,32 +191,108 @@ class StoreVisitController extends Controller
                         : 'Kunjungan ini sudah dibatalkan dan tidak dapat dilaporkan.';
 
                     return response()->json([
-                        'status'  => 'error',
+                        'status' => 'error',
                         'message' => $message,
                     ], 422);
                 }
 
-                // --- UPLOAD KE CLOUDINARY ---
-                $photoPaths = [];
-                foreach ($request->file('photos', []) as $photo) {
-                    $uploaded = Cloudinary::upload($photo->getRealPath(), [
-                        'folder' => 'app_sales/visit_reports/' . date('Y/m'),
-                    ]);
+                // =========================
+                // AMBIL KOORDINAT TOKO DARI ODOO
+                // =========================
+                $partners = $this->odooService->execute_kw(
+                    'res.partner',
+                    'search_read',
+                    [[
+                        ['id', '=', (int) $visit->odoo_partner_id]
+                    ]],
+                    [
+                        'fields' => [
+                            'id',
+                            'partner_latitude',
+                            'partner_longitude',
+                        ],
+                        'limit' => 1,
+                    ]
+                );
 
-                    // Mengambil URL HTTPS aman dari Cloudinary
+                $store = is_array($partners) && !empty($partners)
+                    ? $partners[0]
+                    : null;
+
+                $storeLatitude = $store['partner_latitude'] ?? null;
+                $storeLongitude = $store['partner_longitude'] ?? null;
+
+                if (
+                    $storeLatitude === null ||
+                    $storeLongitude === null ||
+                    $storeLatitude === false ||
+                    $storeLongitude === false
+                ) {
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'Koordinat toko belum tersedia di Odoo.',
+                    ], 422);
+                }
+
+                $storeLatitude = (float) $storeLatitude;
+                $storeLongitude = (float) $storeLongitude;
+
+                // =========================
+                // HITUNG JARAK
+                // =========================
+                $distanceFromStore = $this->calculateDistanceInMeters(
+                    $salesLatitude,
+                    $salesLongitude,
+                    $storeLatitude,
+                    $storeLongitude
+                );
+
+                $radiusInMeters = 100;
+
+                $isOutsideRadius = $distanceFromStore > $radiusInMeters;
+
+                // =========================
+                // UPLOAD FOTO
+                // =========================
+                $photoPaths = [];
+
+                foreach ($request->file('photos', []) as $photo) {
+                    $uploaded = Cloudinary::upload(
+                        $photo->getRealPath(),
+                        [
+                            'folder' => 'app_sales/visit_reports/' . date('Y/m'),
+                        ]
+                    );
+
                     $photoPaths[] = $uploaded->getSecurePath();
                 }
 
+                // =========================
+                // SIMPAN REPORT
+                // =========================
                 VisitReport::create([
-                    'store_visit_id'   => $visit->id,
-                    'pic_name'         => $request->pic_name,
-                    'activities'       => $request->activities,
-                    'stock_percentage' => $request->stock_percentage,
-                    'stock_pcs'        => $request->stock_pcs,
-                    'notes'            => $request->notes,
-                    'photos'           => $photoPaths, // Menyimpan array URL Cloudinary
+                    'store_visit_id'       => $visit->id,
+                    'pic_name'             => $request->pic_name,
+                    'activities'          => $request->activities,
+                    'stock_percentage'    => $request->stock_percentage,
+                    'stock_pcs'           => $request->stock_pcs,
+                    'notes'               => $request->notes,
+                    'photos'              => $photoPaths,
+
+                    'sales_latitude'      => $salesLatitude,
+                    'sales_longitude'     => $salesLongitude,
+                    'sales_accuracy'      => $salesAccuracy,
+                    'distance_from_store' => $distanceFromStore,
+                    'is_outside_radius'   => $isOutsideRadius,
+
+                    'location_captured_at' => $request->input(
+                        'location_captured_at'
+                    ),
                 ]);
 
+                // =========================
+                // SELESAIKAN VISIT
+                // =========================
                 $visit->update([
                     'status'           => 'COMPLETED',
                     'active_store_key' => null,
@@ -179,21 +301,25 @@ class StoreVisitController extends Controller
                 ]);
 
                 return response()->json([
-                    'status'  => 'success',
+                    'status' => 'success',
                     'message' => 'Laporan kunjungan berhasil dikirim.',
-                    'data'    => [
+                    'data' => [
                         'store_visit_id' => $visit->id,
                         'check_out_at'   => $visit->check_out_at->toDateTimeString(),
-                    ]
-                ]);
+                        'distance_from_store' => $distanceFromStore,
+                        'is_outside_radius'   => $isOutsideRadius,
+                    ],
+                ], 200);
             });
         } catch (Exception $e) {
             return response()->json([
-                'status'  => 'error',
+                'status' => 'error',
                 'message' => 'Gagal menyimpan laporan kunjungan: ' . $e->getMessage(),
             ], 500);
         }
     }
+
+
 
     public function cancel(Request $request, $visitId)
     {
@@ -276,14 +402,14 @@ class StoreVisitController extends Controller
     {
         $salesId = $request->user()->id;
 
-        // STEP 1: Ambil data riwayat kunjungan & laporan dari MySQL (Database Utama)
+
         $visits = StoreVisit::with(['report'])
             ->where('sales_id', $salesId)
             ->orderBy('visit_date', 'desc')
             ->orderBy('check_in_at', 'desc')
             ->get();
 
-        // STEP 2: Kumpulkan semua odoo_partner_id dari MySQL (pastikan di-cast ke Integer)
+
         $partnerIds = $visits->pluck('odoo_partner_id')
             ->filter()
             ->map(fn($id) => (int) $id)
@@ -291,24 +417,24 @@ class StoreVisitController extends Controller
             ->values()
             ->toArray();
 
-        // STEP 3: Cari detail nama & alamat toko ke Odoo (via XML-RPC)
+
         $partnersMap = collect();
 
         if (!empty($partnerIds)) {
             $odooPartners = $this->odooClient->executeKw(
                 'res.partner',
                 'search_read',
-                [[['id', 'in', $partnerIds]]],                 // Filter domain berdasarkan ID
-                ['fields' => ['id', 'name', 'street', 'city']] // Ambil kolom nama & alamat saja
+                [[['id', 'in', $partnerIds]]],
+                ['fields' => ['id', 'name', 'street', 'city']]
             );
 
-            // Jika Odoo mengembalikan data, kelompokkan key berdasarkan ID partner
+
             if (is_array($odooPartners)) {
                 $partnersMap = collect($odooPartners)->keyBy('id');
             }
         }
 
-        // STEP 4: Gabungkan data MySQL + data Odoo menjadi 1 objek JSON untuk Flutter
+
         $data = $visits->map(function ($visit) use ($partnersMap) {
             $partnerId = (int) $visit->odoo_partner_id;
             $partner = $partnersMap->get($partnerId);
@@ -335,4 +461,36 @@ class StoreVisitController extends Controller
             'data'    => $data
         ], 200);
     }
+
+    private function calculateDistanceInMeters(
+        float $salesLatitude,
+        float $salesLongitude,
+        float $storeLatitude,
+        float $storeLongitude
+    ): float {
+        $earthRadius = 6371000;
+
+        $latitudeDifference = deg2rad(
+            $storeLatitude - $salesLatitude
+        );
+
+        $longitudeDifference = deg2rad(
+            $storeLongitude - $salesLongitude
+        );
+
+        $a =
+            sin($latitudeDifference / 2) ** 2
+            +
+            cos(deg2rad($salesLatitude))
+            * cos(deg2rad($storeLatitude))
+            * sin($longitudeDifference / 2) ** 2;
+
+        $c = 2 * atan2(
+            sqrt($a),
+            sqrt(1 - $a)
+        );
+
+        return round($earthRadius * $c, 2);
+    }
+
 }

@@ -118,6 +118,72 @@ class DashboardController extends Controller
 
         /*
         |--------------------------------------------------------------------------
+        | Outside Radius Alerts
+        |--------------------------------------------------------------------------
+        */
+
+        $outsideRadiusQuery = VisitReport::query()
+            ->with([
+                'visit.sales:id,name,username',
+            ])
+            ->where('is_outside_radius', true)
+            ->whereHas('visit', function ($query) use ($dateFrom, $dateTo) {
+                $query->where('status', 'COMPLETED');
+
+                if ($dateFrom) {
+                    $query->where('visit_date', '>=', $dateFrom->toDateString());
+                }
+
+                if ($dateTo) {
+                    $query->where('visit_date', '<=', $dateTo->toDateString());
+                }
+            })
+            ->latest('location_captured_at')
+            ->limit(5)
+            ->get();
+
+        $outsideRadiusPartnerIds = $outsideRadiusQuery
+            ->map(fn ($report) => $report->visit?->odoo_partner_id)
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        $outsideRadiusPartners = $this->loadOdooPartners(
+            $odooService,
+            $outsideRadiusPartnerIds->all()
+        );
+
+        $outsideRadiusAlerts = $outsideRadiusQuery
+            ->map(function ($report) use ($outsideRadiusPartners) {
+                $visit = $report->visit;
+                $partnerId = (int) ($visit?->odoo_partner_id ?? 0);
+                $partner = $outsideRadiusPartners->get($partnerId);
+
+                return [
+                    'id' => $report->id,
+                    'store_visit_id' => $report->store_visit_id,
+                    'sales' => [
+                        'id' => $visit?->sales_id,
+                        'name' => $visit?->sales?->name ?? 'Unknown Sales',
+                    ],
+                    'store' => [
+                        'id' => $partnerId,
+                        'name' => $partner['name']
+                            ?? "Toko #{$partnerId}",
+                        'city' => $partner['city'] ?? '-',
+                        'street' => $partner['street'] ?? '-',
+                    ],
+                    'distance_from_store' => $report->distance_from_store,
+                    'sales_accuracy' => $report->sales_accuracy,
+                    'location_captured_at' => $report->location_captured_at?->toDateTimeString(),
+                    'visit_date' => $visit?->visit_date,
+                ];
+            })
+            ->values();
+
+        /*
+        |--------------------------------------------------------------------------
         | Order Visit Reports
         |--------------------------------------------------------------------------
         |
@@ -246,6 +312,8 @@ class DashboardController extends Controller
                 */
 
                 'stores' => $areaOrderPerformance,
+
+                'outsideRadiusAlerts' => $outsideRadiusAlerts,
 
                 /*
                 |--------------------------------------------------------------------------

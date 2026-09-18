@@ -314,7 +314,6 @@ class VisitReportController extends Controller
 
                     'report' => $visit->report
                         ? [
-
                             'id' =>
                                 $visit->report->id,
 
@@ -335,6 +334,27 @@ class VisitReportController extends Controller
 
                             'photos' =>
                                 $visit->report->photos,
+
+                            'sales_latitude' =>
+                                $visit->report->sales_latitude,
+
+                            'sales_longitude' =>
+                                $visit->report->sales_longitude,
+
+                            'sales_accuracy' =>
+                                $visit->report->sales_accuracy,
+
+                            'distance_from_store' =>
+                                $visit->report->distance_from_store,
+
+                            'is_outside_radius' =>
+                                $visit->report->is_outside_radius,
+
+                            'location_captured_at' =>
+                                $visit->report->location_captured_at
+                                    ? $visit->report->location_captured_at
+                                        ->toDateTimeString()
+                                    : null,
                         ]
                         : null,
                 ];

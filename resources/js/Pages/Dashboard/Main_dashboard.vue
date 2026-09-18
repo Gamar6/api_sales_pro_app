@@ -65,6 +65,11 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+
+    outsideRadiusAlerts: {
+        type: Array,
+        default: () => [],
+    },
 });
 
 const activeModule = ref("dashboard");
@@ -84,37 +89,24 @@ const SHIFT_GOAL = 10;
 */
 
 const kpis = computed(() => {
-    const totalCheckIns =
-        props.dashboardStats.totalCheckInsToday ?? 0;
+    const totalCheckIns = props.dashboardStats.totalCheckInsToday ?? 0;
 
-    const progress = Math.min(
-        (totalCheckIns / SHIFT_GOAL) * 100,
-        100,
-    );
+    const progress = Math.min((totalCheckIns / SHIFT_GOAL) * 100, 100);
 
-    const remaining = Math.max(
-        SHIFT_GOAL - totalCheckIns,
-        0,
-    );
+    const remaining = Math.max(SHIFT_GOAL - totalCheckIns, 0);
 
     const averageVisitDuration =
-        props.dashboardStats.averageVisitDuration ??
-        "0m 00s";
+        props.dashboardStats.averageVisitDuration ?? "0m 00s";
 
     return [
         {
             ...staticKpis[0],
 
-            value:
-                totalCheckIns.toLocaleString(),
+            value: totalCheckIns.toLocaleString(),
 
-            progress:
-                Number(
-                    progress.toFixed(1),
-                ),
+            progress: Number(progress.toFixed(1)),
 
-            badge:
-                `SHIFT GOAL: ${SHIFT_GOAL}`,
+            badge: `SHIFT GOAL: ${SHIFT_GOAL}`,
 
             detail:
                 remaining > 0
@@ -125,8 +117,7 @@ const kpis = computed(() => {
         {
             ...staticKpis[1],
 
-            value:
-                averageVisitDuration,
+            value: averageVisitDuration,
         },
     ];
 });
@@ -134,16 +125,10 @@ const kpis = computed(() => {
 
 <template>
     <AdminLayout>
-        <div
-            class="min-h-screen bg-background text-on-surface"
-        >
+        <div class="min-h-screen bg-background text-on-surface">
             <main class="w-full">
-                <div
-                    class="flex w-full flex-col"
-                >
-                    <div
-                        class="flex flex-col gap-space-xl p-space-xl"
-                    >
+                <div class="flex w-full flex-col">
+                    <div class="flex flex-col gap-space-xl p-space-xl">
                         <!-- ================================================= -->
                         <!-- HEADER -->
                         <!-- ================================================= -->
@@ -154,9 +139,7 @@ const kpis = computed(() => {
                         <!-- KPI -->
                         <!-- ================================================= -->
 
-                        <DashboardKpiGrid
-                            :kpis="kpis"
-                        />
+                        <DashboardKpiGrid :kpis="kpis" />
 
                         <!-- ================================================= -->
                         <!-- MODULE TABS -->
@@ -172,22 +155,12 @@ const kpis = computed(() => {
                         <!-- ================================================= -->
 
                         <DashboardOverview
-                            v-if="
-                                activeModule ===
-                                'dashboard'
-                            "
-                            :dashboard-stats="
-                                props.dashboardStats
-                            "
-                            :stores="
-                                props.stores
-                            "
-                            :telemetry="
-                                telemetryFeed
-                            "
-                            :sales-order-chart="
-                                props.salesOrderChart
-                            "
+                            v-if="activeModule === 'dashboard'"
+                            :dashboard-stats="props.dashboardStats"
+                            :stores="props.stores"
+                            :telemetry="telemetryFeed"
+                            :sales-order-chart="props.salesOrderChart"
+                            :outside-radius-alerts="outsideRadiusAlerts"
                         />
 
                         <!-- ================================================= -->
@@ -196,9 +169,7 @@ const kpis = computed(() => {
 
                         <DashboardModulePanels
                             v-else
-                            :active-module="
-                                activeModule
-                            "
+                            :active-module="activeModule"
                             :products="products"
                             :stores="staticStores"
                         />
@@ -208,4 +179,3 @@ const kpis = computed(() => {
         </div>
     </AdminLayout>
 </template>
-

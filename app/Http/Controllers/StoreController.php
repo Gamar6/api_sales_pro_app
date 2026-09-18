@@ -45,7 +45,7 @@ class StoreController extends Controller
                 if ($userLat !== null && $userLng !== null && $storeLat != 0 && $storeLng != 0) {
                     $distanceInKm = GeoHelper::calculateHaversineDistance($userLat, $userLng, $storeLat, $storeLng);
                     $distanceLabel = GeoHelper::formatDistanceLabel($distanceInKm);
-                    
+
                     $distanceInKm = round($distanceInKm, 2);
                 }
 
@@ -60,8 +60,8 @@ class StoreController extends Controller
                     'sales_name'        => $store->sales_name,
                     'latitude'          => $storeLat,
                     'longitude'         => $storeLng,
-                    'distance'          => $distanceInKm, 
-                    'distance_label'    => $distanceLabel, 
+                    'distance'          => $distanceInKm,
+                    'distance_label'    => $distanceLabel,
                     'retensi_status'    => $store->retensi_status,
                     'avg_retensi_weeks' => $store->avg_retensi_weeks,
                     'total_sales'       => (float) $store->total_sales,
@@ -80,7 +80,7 @@ class StoreController extends Controller
 
         return response()->json([
             'success' => true,
-            'data'    => $stores->values()->all() 
+            'data'    => $stores->values()->all()
         ]);
     }
 

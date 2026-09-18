@@ -16,6 +16,11 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+
+    outsideRadiusAlerts: {
+        type: Array,
+        default: () => [],
+    },
 });
 
 const alertVisible = ref(true);
@@ -162,6 +167,33 @@ const getTelemetryStatusClass = (status) => {
     }
 
     return "bg-slate-400";
+};
+
+const outsideRadiusCount = computed(() => {
+    return props.outsideRadiusAlerts.length;
+});
+
+const formatDistance = (distance) => {
+    const value = Number(distance);
+
+    if (!Number.isFinite(value)) {
+        return "-";
+    }
+
+    if (value >= 1000) {
+        return `${(value / 1000).toFixed(2)} km`;
+    }
+
+    return `${Math.round(value)} m`;
+};
+
+const formatAlertDate = (date) => {
+    if (!date) return "-";
+
+    return new Date(date.replace(" ", "T")).toLocaleString("id-ID", {
+        dateStyle: "medium",
+        timeStyle: "short",
+    });
 };
 </script>
 
@@ -434,42 +466,102 @@ const getTelemetryStatusClass = (status) => {
         </div>
 
         <!-- ============================================================= -->
-        <!-- ALERT -->
+        <!-- OUTSIDE RADIUS ALERT -->
         <!-- ============================================================= -->
 
         <article
-            v-if="alertVisible"
-            class="rounded-lg bg-surface-container-lowest p-space-lg shadow-sm"
+            v-if="outsideRadiusCount > 0"
+            class="rounded-lg border border-amber-200 bg-amber-50 p-space-lg shadow-sm"
         >
             <div class="flex items-start justify-between gap-4">
-                <div class="flex gap-4">
+                <div class="flex min-w-0 gap-3">
                     <div
-                        class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700"
+                        class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-200 text-amber-800"
                     >
-                        !
+                        <span class="material-symbols-outlined">
+                            location_off
+                        </span>
                     </div>
 
-                    <div>
-                        <h3 class="text-sm font-bold text-on-surface">
-                            Dashboard Monitoring
-                        </h3>
+                    <div class="min-w-0">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <h3 class="text-sm font-bold text-amber-900">
+                                Kunjungan di Luar Radius
+                            </h3>
 
-                        <p
-                            class="mt-1 text-sm leading-6 text-on-surface-variant"
-                        >
-                            Pantau aktivitas sales, performa order, dan coverage
-                            toko dari dashboard ini.
+                            <span
+                                class="rounded-full bg-amber-200 px-2 py-0.5 text-[11px] font-bold text-amber-900"
+                            >
+                                {{ outsideRadiusCount }} laporan
+                            </span>
+                        </div>
+
+                        <p class="mt-1 text-sm leading-6 text-amber-800">
+                            Terdapat laporan kunjungan dengan jarak GPS melebihi
+                            radius yang ditentukan.
                         </p>
                     </div>
                 </div>
+            </div>
 
-                <button
-                    type="button"
-                    class="rounded-md px-2 py-1 text-xs font-semibold text-on-surface-variant transition hover:bg-surface-container"
-                    @click="alertVisible = false"
+            <div class="mt-5 divide-y divide-amber-200">
+                <div
+                    v-for="alert in outsideRadiusAlerts"
+                    :key="alert.id"
+                    class="flex flex-col gap-2 py-4 first:pt-0 last:pb-0"
                 >
-                    Tutup
-                </button>
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                            <p
+                                class="truncate text-sm font-bold text-amber-950"
+                            >
+                                {{ alert.store.name }}
+                            </p>
+
+                            <p class="mt-0.5 text-xs text-amber-800">
+                                {{ alert.store.city }}
+                            </p>
+                        </div>
+
+                        <span
+                            class="shrink-0 rounded-full bg-amber-200 px-2 py-1 text-[11px] font-bold text-amber-900"
+                        >
+                            Outside Radius
+                        </span>
+                    </div>
+
+                    <div
+                        class="grid grid-cols-1 gap-1 text-xs text-amber-800 sm:grid-cols-2"
+                    >
+                        <span>
+                            Sales:
+                            <strong>{{ alert.sales.name }}</strong>
+                        </span>
+
+                        <span>
+                            Jarak:
+                            <strong>
+                                {{ formatDistance(alert.distance_from_store) }}
+                            </strong>
+                        </span>
+
+                        <span>
+                            Akurasi:
+                            <strong>
+                                {{ alert.sales_accuracy ?? "-" }} m
+                            </strong>
+                        </span>
+
+                        <span>
+                            Waktu:
+                            <strong>
+                                {{
+                                    formatAlertDate(alert.location_captured_at)
+                                }}
+                            </strong>
+                        </span>
+                    </div>
+                </div>
             </div>
         </article>
 

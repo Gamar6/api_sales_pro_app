@@ -29,7 +29,7 @@ class OdooService
     public function authenticate(): bool
     {
         $client = new Client($this->url . '/xmlrpc/2/common');
-        
+
         $req = new Request('authenticate', [
             new Value($this->db, "string"),
             new Value($this->username, "string"),
@@ -305,35 +305,33 @@ class OdooService
             ['sale_order_ids.date_order', '>=', '2025-01-01 00:00:00'],
             ['sale_order_ids.date_order', '<=', now()->format('Y-m-d 23:59:59')],
         ];
-        
+
         // 2. Tentukan field yang ingin diambil & limit
         $kwargs = [
             'fields' => [
-                'id', 
-                'name', 
-                'display_name', 
-                'phone', 
-                'city', 
+                'id',
+                'name',
+                'display_name',
+                'phone',
+                'city',
                 'street',
-                'partner_latitude',  // Latitude Odoo
-                'partner_longitude',  // Longitude Odoo
+                'partner_latitude',
+                'partner_longitude',
             ],
         ];
 
-        // 3. Encode otomatis semua parameter ke format XML-RPC
         $req = new Request('execute_kw', [
             $encoder->encode($this->db),
             $encoder->encode($this->uid),
             $encoder->encode($this->password),
             $encoder->encode('res.partner'),
             $encoder->encode('search_read'),
-            $encoder->encode([$domain]), // Array di dalam array: [ [] ]
+            $encoder->encode([$domain]),
             $encoder->encode($kwargs),
         ]);
 
         $response = $client->send($req);
 
-        // Jika terjadi error dari server Odoo, tampilkan alasannya di terminal
         if ($response->faultCode()) {
             dump("Odoo Error Code: " . $response->faultCode());
             dump("Odoo Error Message: " . $response->faultString());
@@ -397,17 +395,17 @@ class OdooService
         $encoder = new \PhpXmlRpc\Encoder();
 
         $domain = [
-            ['state', 'in', ['sale', 'done']], 
+            ['state', 'in', ['sale', 'done']],
             ['product_id.active', '=', true],
         ];
 
         $kwargs = [
             'fields' => [
                 'id',
-                'product_id',   // Berisi [id, nama_produk]
-                'product_uom_qty', // Jumlah yang terjual
+                'product_id',
+                'product_uom_qty',
                 'price_unit',
-                'order_id',     // Referensi ke nomor Sales Order
+                'order_id',
             ],
             'limit' => $limit,
         ];
@@ -416,7 +414,7 @@ class OdooService
             $encoder->encode($this->db),
             $encoder->encode($this->uid),
             $encoder->encode($this->password),
-            $encoder->encode('sale.order.line'), // Model baris pesanan penjualan
+            $encoder->encode('sale.order.line'),
             $encoder->encode('search_read'),
             $encoder->encode([$domain]),
             $encoder->encode($kwargs),
@@ -444,14 +442,14 @@ class OdooService
         $client = new Client($this->url . '/xmlrpc/2/object');
         $encoder = new \PhpXmlRpc\Encoder();
 
-        // 1. Ambil ID produk unik yang pernah terjual (status sale/done & aktif)
+
         $domainLine = [
             ['state', 'in', ['sale', 'done']],
             ['product_id.active', '=', true],
         ];
 
         $reqLine = new Request('execute_kw', [
-            $encoder->encode($this->db ?? $this->db), // sesuaikan dengan properti kamu
+            $encoder->encode($this->db ?? $this->db),
             $encoder->encode($this->uid),
             $encoder->encode($this->password),
             $encoder->encode('sale.order.line'),
@@ -467,7 +465,7 @@ class OdooService
         if ($resLine->faultCode()) return [];
 
         $soldLines = $encoder->decode($resLine->value()) ?? [];
-        
+
         $productIds = [];
         foreach ($soldLines as $line) {
             if (isset($line['product_id'][0])) {
@@ -480,10 +478,10 @@ class OdooService
             return [];
         }
 
-        // 2. Ambil stok dari stock.quant khusus lokasi yang perusahaannya adalah CV (company_id = 1)
+
         $domainQuant = [
             ['product_id', 'in', array_values($productIds)],
-            ['company_id', '=', $companyId], // Filter langsung berdasarkan company CV
+            ['company_id', '=', $companyId],
         ];
 
         $kwargsQuant = [
@@ -520,7 +518,7 @@ class OdooService
         $encoder = new \PhpXmlRpc\Encoder();
 
         $domain = [
-            ['usage', '=', 'internal'] // Hanya ambil lokasi bertipe internal (gudang)
+            ['usage', '=', 'internal']
         ];
 
         $kwargs = [
@@ -545,7 +543,7 @@ class OdooService
     }
 
     /**
-     * Ambil produk terjual dan stok khususnya dari lokasi CV tertentu
+     * Ambil produk terjual dan stok khusus dari lokasi CV
      */
     public function getActiveSoldProductsFromCV(int $cvLocationId, int $limit = 10): array
     {
@@ -556,7 +554,7 @@ class OdooService
         $client = new Client($this->url . '/xmlrpc/2/object');
         $encoder = new \PhpXmlRpc\Encoder();
 
-        // 1. Ambil ID produk unik yang pernah terjual (status sale/done & aktif)
+
         $domainLine = [
             ['state', 'in', ['sale', 'done']],
             ['product_id.active', '=', true],
@@ -579,7 +577,7 @@ class OdooService
         if ($resLine->faultCode()) return [];
 
         $soldLines = $encoder->decode($resLine->value()) ?? [];
-        
+
         $productIds = [];
         foreach ($soldLines as $line) {
             if (isset($line['product_id'][0])) {
@@ -592,7 +590,7 @@ class OdooService
             return [];
         }
 
-        // 2. Ambil stok produk tersebut khusus dari stock.quant berdasarkan lokasi CV
+
         $domainQuant = [
             ['product_id', 'in', array_values($productIds)],
             ['location_id', '=', $cvLocationId],
@@ -666,12 +664,12 @@ class OdooService
 
         $kwargs = [
             'fields' => [
-                'id', 'name', 'display_name', 'street', 'street2', 
+                'id', 'name', 'display_name', 'street', 'street2',
                 'city', 'state_id', 'country_id', 'phone', 'mobile', 'email', 'vat'
             ]
         ];
 
-        // Cukup panggil helper executeKw() yang sudah pakai Encoder bawaan PhpXmlRpc
+
         return $this->execute_kw('res.partner', 'search_read', [$domain], $kwargs) ?? [];
     }
 }

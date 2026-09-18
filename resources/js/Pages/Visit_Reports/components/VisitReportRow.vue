@@ -102,6 +102,30 @@ const formatDate = (date) => {
         year: "numeric",
     });
 };
+
+const report = computed(() => props.visit.report ?? null);
+
+const isOutsideRadius = computed(() => {
+    return (
+        report.value?.is_outside_radius === true ||
+        report.value?.is_outside_radius === 1 ||
+        report.value?.is_outside_radius === "1"
+    );
+});
+
+const formatDistance = (distance) => {
+    const value = Number(distance);
+
+    if (!Number.isFinite(value)) {
+        return "-";
+    }
+
+    if (value >= 1000) {
+        return `${(value / 1000).toFixed(2)} km`;
+    }
+
+    return `${Math.round(value)} m`;
+};
 </script>
 
 <template>
@@ -269,6 +293,19 @@ const formatDate = (date) => {
                 <span class="font-code-metric text-[11px] font-semibold">
                     Submitted
                 </span>
+
+                <span class="material-symbols-outlined text-[15px]">
+                    location_off
+                </span>
+
+                <span class="text-[10px] font-semibold"> Outside Radius </span>
+
+                <div
+                    v-if="hasReport && isOutsideRadius"
+                    class="mt-0.5 text-[10px] text-secondary"
+                >
+                    {{ formatDistance(report.distance_from_store) }}
+                </div>
             </div>
 
             <span

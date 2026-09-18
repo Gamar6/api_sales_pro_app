@@ -122,7 +122,6 @@ const storeAddress = computed(() => {
         <!-- HEADER -->
         <!-- ============================================================ -->
 
-
         <div
             class="shrink-0 p-space-base bg-primary text-on-primary flex items-start justify-between gap-space-base"
         >

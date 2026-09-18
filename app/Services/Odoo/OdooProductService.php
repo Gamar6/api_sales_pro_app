@@ -38,7 +38,7 @@ class OdooProductService
 
         $kwargs = [
             'fields' => [
-                'id', 'display_name', 'default_code', 'lst_price', 
+                'id', 'display_name', 'default_code', 'lst_price',
                 'qty_available', 'free_qty', 'uom_name', 'categ_id'
             ],
             'limit' => $limit
@@ -137,9 +137,6 @@ class OdooProductService
                     'weight_unit' => 'kg',
 
                     // Packaging
-                    // Untuk sementara default.
-                    // Nanti bisa kita ambil dari Odoo kalau field packaging
-                    // sudah diketahui.
                     'package_unit' => 'karton',
                     'packs_per_package' => 1,
 
@@ -306,9 +303,9 @@ class OdooProductService
         ];
 
         $soldLines = $this->client->executeKw(
-            'sale.order.line', 
-            'search_read', 
-            [$domainLine], 
+            'sale.order.line',
+            'search_read',
+            [$domainLine],
             ['fields' => ['product_id'], 'limit' => $limit]
         );
 

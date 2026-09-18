@@ -8,7 +8,7 @@ use Illuminate\Http\UploadedFile;
 class CloudinaryService
 {
     /**
-     * Upload image ke Cloudinary.
+     * Upload image to Cloudinary.
      */
     public function uploadImage(
         UploadedFile $file,
@@ -29,7 +29,7 @@ class CloudinaryService
     }
 
     /**
-     * Hapus image dari Cloudinary.
+     * Delete image to Cloudinary.
      */
     public function deleteImage(?string $publicId): void
     {
