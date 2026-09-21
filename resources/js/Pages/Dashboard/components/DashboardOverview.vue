@@ -1,6 +1,12 @@
 <script setup>
 import { computed, ref } from "vue";
 
+const showOutsideRadiusAlerts = ref(true);
+
+const goToAllExceptions = () => {
+    window.location.href = route("visit-exceptions.index");
+};
+
 const props = defineProps({
     stores: {
         type: Array,
@@ -470,9 +476,10 @@ const formatAlertDate = (date) => {
         <!-- ============================================================= -->
 
         <article
-            v-if="outsideRadiusCount > 0"
+            v-if="showOutsideRadiusAlerts && outsideRadiusCount > 0"
             class="rounded-lg border border-amber-200 bg-amber-50 p-space-lg shadow-sm"
         >
+            <!-- Header -->
             <div class="flex items-start justify-between gap-4">
                 <div class="flex min-w-0 gap-3">
                     <div
@@ -502,8 +509,21 @@ const formatAlertDate = (date) => {
                         </p>
                     </div>
                 </div>
+
+                <!-- Tombol Tutup -->
+                <button
+                    type="button"
+                    class="shrink-0 rounded-md p-1 text-amber-700 transition hover:bg-amber-200 hover:text-amber-950"
+                    title="Tutup"
+                    @click="showOutsideRadiusAlerts = false"
+                >
+                    <span class="material-symbols-outlined text-lg">
+                        close
+                    </span>
+                </button>
             </div>
 
+            <!-- Alert List -->
             <div class="mt-5 divide-y divide-amber-200">
                 <div
                     v-for="alert in outsideRadiusAlerts"
@@ -562,6 +582,20 @@ const formatAlertDate = (date) => {
                         </span>
                     </div>
                 </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="mt-5 border-t border-amber-200 pt-4">
+                <button
+                    type="button"
+                    class="flex w-full items-center justify-center gap-2 rounded-md border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-900 transition hover:bg-amber-100"
+                    @click="goToAllExceptions"
+                >
+                    Lihat Semua
+                    <span class="material-symbols-outlined text-base">
+                        arrow_forward
+                    </span>
+                </button>
             </div>
         </article>
 

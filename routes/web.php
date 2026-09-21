@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\VisitExceptionController;
 use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\Admin\VisitReportController;
 use App\Http\Controllers\ProductCatalogController;
@@ -75,6 +76,18 @@ Route::middleware([
 
         Route::post('/users/{user}/reset-password', [UserManagementController::class, 'resetPassword'])
             ->name('users.reset-password');
+    });
+
+    Route::middleware([
+    'auth',
+    'verified',
+    'active',
+    'role:admin,superadmin',
+    ])->group(function () {
+        Route::get('/visit_exception', [
+            VisitExceptionController::class,
+            'index',
+        ])->name('visit-exceptions.index');
     });
 
 require __DIR__.'/auth.php';

@@ -341,6 +341,7 @@ class OdooService
         return $encoder->decode($response->value()) ?? [];
     }
 
+
     /**
      * Hitung total jumlah toko/partner yang ada di Odoo
      */
@@ -652,24 +653,69 @@ class OdooService
         return $encoder->decode($response->value()) ?? [];
     }
 
-    public function getCompleteStoreData(array $storeIds): array
-    {
-        if (empty($storeIds)) {
-            return [];
+        public function getCompleteStoreData(array $storeIds): array
+        {
+            if (empty($storeIds)) {
+                return [];
+            }
+
+            $domain = [
+                ['id', 'in', array_values($storeIds)],
+            ];
+
+            $kwargs = [
+                'fields' => [
+                    'id',
+                    'name',
+                    'display_name',
+                    'street',
+                    'street2',
+                    'city',
+                    'state_id',
+                    'country_id',
+                    'phone',
+                    'mobile',
+                    'email',
+                    'vat',
+                    'partner_latitude',
+                    'partner_longitude',
+                ],
+            ];
+
+            return $this->execute_kw(
+                'res.partner',
+                'search_read',
+                [$domain],
+                $kwargs
+            ) ?? [];
         }
 
-        $domain = [
-            ['id', 'in', array_values($storeIds)]
-        ];
+        public function searchPartnerIdsByName(string $search): array
+        {
+            if (trim($search) === '') {
+                return [];
+            }
 
-        $kwargs = [
-            'fields' => [
-                'id', 'name', 'display_name', 'street', 'street2',
-                'city', 'state_id', 'country_id', 'phone', 'mobile', 'email', 'vat'
-            ]
-        ];
+            $domain = [
+                ['name', 'ilike', $search],
+            ];
 
+            $kwargs = [
+                'fields' => ['id', 'name'],
+                'limit' => 100,
+            ];
 
-        return $this->execute_kw('res.partner', 'search_read', [$domain], $kwargs) ?? [];
-    }
+            $partners = $this->execute_kw(
+                'res.partner',
+                'search_read',
+                [$domain],
+                $kwargs
+            ) ?? [];
+
+            return collect($partners)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->values()
+                ->all();
+        }
 }
