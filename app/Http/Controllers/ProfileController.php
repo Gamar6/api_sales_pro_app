@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Redirect;
 use Inertia\Inertia;
 use Inertia\Response;
 use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
+use Illuminate\Validation\Rule;
 
 class ProfileController extends Controller
 {
@@ -100,4 +101,30 @@ class ProfileController extends Controller
 
         return Redirect::to('/');
     }
+
+    public function updateUsername(Request $request)
+    {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'username' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('users', 'username')->ignore($user->id),
+            ],
+        ]);
+
+        $user->username = $validated['username'];
+        $user->save();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Username berhasil diperbarui.',
+            'data' => [
+                'username' => $user->username,
+            ],
+        ]);
+    }
+
 }

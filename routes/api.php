@@ -55,6 +55,11 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         [ProfileController::class, 'updatePhoto']
     );
 
+    Route::put(
+        '/user/username',
+        [ProfileController::class, 'updateUsername']
+    );
+
     Route::prefix('store-visits')->group(function () {
 
         Route::post(
