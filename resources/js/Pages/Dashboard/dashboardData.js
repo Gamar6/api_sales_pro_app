@@ -18,28 +18,17 @@ export const modules = [
     { key: "users", label: "7. User & Roles", icon: "manage_accounts" },
 ];
 
-export const kpis = [
-    {
-        label: "Total Check-Ins Today",
-        value: "318",
+export const kpiConfig = {
+    checkIns: {
+        label: "Today's Check-ins",
         suffix: "Visits",
-        progress: 88.3,
-        badge: "SHIFT GOAL: 360",
-        trend: "+14% vs 30d pace",
-        detail: "42 visits to target",
-        icon: "trending_up",
     },
-    {
-        label: "Avg Visit Duration",
-        value: "28m 45s",
+
+    visitDuration: {
+        label: "Avg. Visit Duration",
         suffix: "/ store",
-        progress: 34.2,
-        badge: "GUIDE: 20-45m",
-        trend: "Compliance Optimal",
-        detail: "6 Anomaly Flags",
-        icon: "schedule",
     },
-];
+};
 
 export const clusters = [
     {

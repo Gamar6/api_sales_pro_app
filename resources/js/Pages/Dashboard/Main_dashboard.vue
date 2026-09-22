@@ -10,7 +10,7 @@ import DashboardModulePanels from "./components/DashboardModulePanels.vue";
 
 import {
     clusters,
-    kpis as staticKpis,
+    kpiConfig,
     modules,
     products,
     stores as staticStores,
@@ -76,51 +76,102 @@ const activeModule = ref("dashboard");
 
 /*
 |--------------------------------------------------------------------------
-| Shift Goal
-|--------------------------------------------------------------------------
-*/
-
-const SHIFT_GOAL = 10;
-
-/*
-|--------------------------------------------------------------------------
 | KPI
 |--------------------------------------------------------------------------
 */
 
 const kpis = computed(() => {
-    const totalCheckIns = props.dashboardStats.totalCheckInsToday ?? 0;
+    const stats = props.dashboardStats;
 
-    const progress = Math.min((totalCheckIns / SHIFT_GOAL) * 100, 100);
+    /*
+    |--------------------------------------------------------------------------
+    | Today's Check-ins
+    |--------------------------------------------------------------------------
+    */
 
-    const remaining = Math.max(SHIFT_GOAL - totalCheckIns, 0);
+    const totalCheckIns = Number(stats.totalCheckInsToday ?? 0);
 
-    const averageVisitDuration =
-        props.dashboardStats.averageVisitDuration ?? "0m 00s";
+    const activeSalesCount = Number(stats.activeSalesCount ?? 0);
+
+    const targetPerSales = Number(stats.checkInTargetPerSales ?? 5);
+
+    const targetToday = Number(
+        stats.checkInTargetToday ?? activeSalesCount * targetPerSales,
+    );
+
+    const progress =
+        targetToday > 0
+            ? Math.min((totalCheckIns / targetToday) * 100, 100)
+            : 0;
+
+    const remaining = Math.max(targetToday - totalCheckIns, 0);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Check-in Status
+    |--------------------------------------------------------------------------
+    */
+
+    const checkInStatus =
+        targetToday === 0
+            ? "No active sales"
+            : totalCheckIns >= targetToday
+              ? "Shift target achieved"
+              : `${remaining} visits to target`;
+
+    /*
+    |--------------------------------------------------------------------------
+    | Average Visit Duration
+    |--------------------------------------------------------------------------
+    */
+
+    const averageVisitDuration = stats.averageVisitDuration ?? "0m 00s";
 
     return [
         {
-            ...staticKpis[0],
+            key: "check-ins",
+
+            label: kpiConfig.checkIns.label,
 
             value: totalCheckIns.toLocaleString(),
 
+            suffix: kpiConfig.checkIns.suffix,
+
             progress: Number(progress.toFixed(1)),
 
-            badge: `SHIFT GOAL: ${SHIFT_GOAL}`,
+            badge:
+                targetToday > 0
+                    ? `SHIFT GOAL: ${targetToday}`
+                    : "NO ACTIVE SALES",
 
-            detail:
-                remaining > 0
-                    ? `${remaining} visits to target`
-                    : "Shift target achieved",
+            context:
+                targetToday > 0
+                    ? `${activeSalesCount} active sales · ${targetPerSales} visits each`
+                    : "No active sales available",
+
+            detail: checkInStatus,
+
+            status:
+                targetToday === 0
+                    ? "neutral"
+                    : totalCheckIns >= targetToday
+                      ? "success"
+                      : "progress",
         },
 
         {
-            ...staticKpis[1],
+            key: "visit-duration",
+
+            label: kpiConfig.visitDuration.label,
 
             value: averageVisitDuration,
+
+            suffix: kpiConfig.visitDuration.suffix,
         },
     ];
 });
+
+console.log("dashboardStats:", props.dashboardStats);
 </script>
 
 <template>

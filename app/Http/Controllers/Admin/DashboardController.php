@@ -58,6 +58,16 @@ class DashboardController extends Controller
 
         $totalCheckInsToday = StoreVisit::checkedInToday()->count();
 
+        $activeSalesCount = User::query()
+            ->where('role', 'sales')
+            ->where('status', 'active')
+            ->count();
+
+        $checkInTargetPerSales = 5;
+
+        $checkInTargetToday =
+            $activeSalesCount * $checkInTargetPerSales;
+
         /*
         |--------------------------------------------------------------------------
         | Average Visit Duration
@@ -280,51 +290,44 @@ class DashboardController extends Controller
             'Dashboard/Main_dashboard',
             [
                 'dashboardStats' => [
-                    'totalCheckInsToday' => $totalCheckInsToday,
-                    'averageVisitDuration' => $averageVisitDuration,
+                // Today's Check-in
 
-                    /*
-                    |--------------------------------------------------------------------------
-                    | Global Order Summary
-                    |--------------------------------------------------------------------------
-                    */
+                'totalCheckInsToday' => $totalCheckInsToday,
 
-                    'uniqueOrderStores' => $orderVisitReports
-                        ->map(
-                            fn ($report) =>
-                                $report->visit?->odoo_partner_id
-                        )
-                        ->filter()
-                        ->unique()
-                        ->count(),
+                'activeSalesCount' => $activeSalesCount,
 
-                    'orderEvents' => $orderVisitReports->count(),
+                'checkInTargetPerSales' => $checkInTargetPerSales,
 
-                    'totalSnapshotStores' => $stores->count(),
-                ],
+                'checkInTargetToday' => $checkInTargetToday,
 
+                // AVG Visit Duration
+
+                'averageVisitDuration' => $averageVisitDuration,
+
+                // Global Order Summary
+
+                'uniqueOrderStores' => $orderVisitReports
+                    ->map(
+                        fn ($report) =>
+                            $report->visit?->odoo_partner_id
+                    )
+                    ->filter()
+                    ->unique()
+                    ->count(),
+
+                'orderEvents' => $orderVisitReports->count(),
+
+                'totalSnapshotStores' => $stores->count(),
+            ],
                 'salesOrderChart' => $salesOrderChart,
 
-                /*
-                |--------------------------------------------------------------------------
-                | Area Performance
-                |--------------------------------------------------------------------------
-                */
+                // Area Performance
 
                 'stores' => $areaOrderPerformance,
 
                 'outsideRadiusAlerts' => $outsideRadiusAlerts,
 
-                /*
-                |--------------------------------------------------------------------------
-                | Filters
-                |--------------------------------------------------------------------------
-                |
-                | Tetap kirim month/year untuk kompatibilitas
-                | frontend lama, tetapi filter utama sekarang
-                | date_from/date_to.
-                |
-                */
+                // Filters
 
                 'filters' => [
                     'date_from' => $dateFrom?->format('Y-m-d'),
