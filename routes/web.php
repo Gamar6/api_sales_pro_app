@@ -25,6 +25,11 @@ Route::get(
 )->middleware(['auth', 'verified', 'active'])
  ->name('dashboard');
 
+Route::get('/dashboard/export', [
+    DashboardController::class,
+    'exportSummary',
+])->name('dashboard.export');
+
 Route::middleware(['auth', 'active'])->group(function () {
 
     Route::get(

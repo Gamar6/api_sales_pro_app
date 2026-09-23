@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exports\DashboardSummaryExport;
 use App\Http\Controllers\Controller;
 use App\Models\StoreVisit;
 use App\Models\User;
@@ -16,6 +17,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Inertia\Inertia;
 use Rap2hpoutre\FastExcel\FastExcel;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class DashboardController extends Controller
 {
@@ -26,19 +28,6 @@ class DashboardController extends Controller
         Request $request,
         OdooService $odooService
     ) {
-        /*
-        |--------------------------------------------------------------------------
-        | Dashboard Filter
-        |--------------------------------------------------------------------------
-        |
-        | Default:
-        |   All Time
-        |
-        | Optional:
-        |   ?date_from=2026-09-01&date_to=2026-09-15
-        |
-        */
-
         $dateFrom = $request->input('date_from');
         $dateTo = $request->input('date_to');
 
@@ -50,12 +39,6 @@ class DashboardController extends Controller
             ? Carbon::parse($dateTo)->endOfDay()
             : null;
 
-        /*
-        |--------------------------------------------------------------------------
-        | Today's Check In
-        |--------------------------------------------------------------------------
-        */
-
         $totalCheckInsToday = StoreVisit::checkedInToday()->count();
 
         $activeSalesCount = User::query()
@@ -64,15 +47,8 @@ class DashboardController extends Controller
             ->count();
 
         $checkInTargetPerSales = 5;
-
         $checkInTargetToday =
             $activeSalesCount * $checkInTargetPerSales;
-
-        /*
-        |--------------------------------------------------------------------------
-        | Average Visit Duration
-        |--------------------------------------------------------------------------
-        */
 
         $averageVisitDurationSeconds = StoreVisit::query()
             ->whereNotNull('check_in_at')
@@ -105,47 +81,35 @@ class DashboardController extends Controller
             );
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | Latest Retention Snapshot
-        |--------------------------------------------------------------------------
-        |
-        | Snapshot Excel adalah MASTER POPULATION toko.
-        |
-        | Artinya:
-        |
-        |   totalStores
-        |       =
-        |   seluruh toko yang ada di snapshot
-        |
-        | Kota juga mengikuti snapshot Excel.
-        |
-        */
-
         $stores = $this->loadRetentionSnapshot(
             $odooService
         );
-
-        /*
-        |--------------------------------------------------------------------------
-        | Outside Radius Alerts
-        |--------------------------------------------------------------------------
-        */
 
         $outsideRadiusQuery = VisitReport::query()
             ->with([
                 'visit.sales:id,name,username',
             ])
             ->where('is_outside_radius', true)
-            ->whereHas('visit', function ($query) use ($dateFrom, $dateTo) {
+            ->whereHas('visit', function ($query) use (
+                $dateFrom,
+                $dateTo
+            ) {
                 $query->where('status', 'COMPLETED');
 
                 if ($dateFrom) {
-                    $query->where('visit_date', '>=', $dateFrom->toDateString());
+                    $query->where(
+                        'visit_date',
+                        '>=',
+                        $dateFrom->toDateString()
+                    );
                 }
 
                 if ($dateTo) {
-                    $query->where('visit_date', '<=', $dateTo->toDateString());
+                    $query->where(
+                        'visit_date',
+                        '<=',
+                        $dateTo->toDateString()
+                    );
                 }
             })
             ->latest('location_captured_at')
@@ -153,7 +117,10 @@ class DashboardController extends Controller
             ->get();
 
         $outsideRadiusPartnerIds = $outsideRadiusQuery
-            ->map(fn ($report) => $report->visit?->odoo_partner_id)
+            ->map(
+                fn ($report) =>
+                    $report->visit?->odoo_partner_id
+            )
             ->filter()
             ->map(fn ($id) => (int) $id)
             ->unique()
@@ -167,15 +134,21 @@ class DashboardController extends Controller
         $outsideRadiusAlerts = $outsideRadiusQuery
             ->map(function ($report) use ($outsideRadiusPartners) {
                 $visit = $report->visit;
-                $partnerId = (int) ($visit?->odoo_partner_id ?? 0);
-                $partner = $outsideRadiusPartners->get($partnerId);
+                $partnerId = (int) (
+                    $visit?->odoo_partner_id ?? 0
+                );
+
+                $partner = $outsideRadiusPartners->get(
+                    $partnerId
+                );
 
                 return [
                     'id' => $report->id,
                     'store_visit_id' => $report->store_visit_id,
                     'sales' => [
                         'id' => $visit?->sales_id,
-                        'name' => $visit?->sales?->name ?? 'Unknown Sales',
+                        'name' => $visit?->sales?->name
+                            ?? 'Unknown Sales',
                     ],
                     'store' => [
                         'id' => $partnerId,
@@ -184,57 +157,28 @@ class DashboardController extends Controller
                         'city' => $partner['city'] ?? '-',
                         'street' => $partner['street'] ?? '-',
                     ],
-                    'distance_from_store' => $report->distance_from_store,
-                    'sales_accuracy' => $report->sales_accuracy,
-                    'location_captured_at' => $report->location_captured_at?->toDateTimeString(),
+                    'distance_from_store' =>
+                        $report->distance_from_store,
+                    'sales_accuracy' =>
+                        $report->sales_accuracy,
+                    'location_captured_at' =>
+                        $report->location_captured_at
+                            ?->toDateTimeString(),
                     'visit_date' => $visit?->visit_date,
                 ];
             })
             ->values();
-
-        /*
-        |--------------------------------------------------------------------------
-        | Order Visit Reports
-        |--------------------------------------------------------------------------
-        |
-        | Rule:
-        |
-        |   visit_reports.activities contains "Order"
-        |
-        | Satu store bisa mempunyai beberapa Order.
-        |
-        | Untuk metric utama:
-        |
-        |   unique store = dihitung 1 kali
-        |
-        | Untuk metric sekunder:
-        |
-        |   order_events = jumlah event Order sebenarnya
-        |
-        */
 
         $orderVisitReports = $this->getOrderVisitReports(
             $dateFrom,
             $dateTo
         );
 
-        /*
-        |--------------------------------------------------------------------------
-        | Odoo Partner Data
-        |--------------------------------------------------------------------------
-        |
-        | Ambil partner Odoo berdasarkan partner yang ditemukan
-        | dari StoreVisit.
-        |
-        | Odoo digunakan sebagai sumber data partner/enrichment.
-        |
-        | Kota untuk performance area tetap menggunakan snapshot
-        | karena snapshot adalah master population.
-        |
-        */
-
         $orderedPartnerIds = $orderVisitReports
-            ->map(fn ($report) => $report->visit?->odoo_partner_id)
+            ->map(
+                fn ($report) =>
+                    $report->visit?->odoo_partner_id
+            )
             ->filter()
             ->map(fn ($id) => (int) $id)
             ->unique()
@@ -245,112 +189,86 @@ class DashboardController extends Controller
             $orderedPartnerIds->all()
         );
 
-        /*
-        |--------------------------------------------------------------------------
-        | Sales Order Performance
-        |--------------------------------------------------------------------------
-        */
-
         $salesOrderChart = $this->buildSalesOrderChart(
             $orderVisitReports
         );
 
-        /*
-        |--------------------------------------------------------------------------
-        | Area / City Order Performance
-        |--------------------------------------------------------------------------
-        |
-        | Denominator:
-        |   SEMUA toko di snapshot Excel terbaru.
-        |
-        | Numerator:
-        |   UNIQUE toko yang melakukan Order.
-        |
-        | Secondary:
-        |   jumlah raw order event.
-        |
-        | Reps:
-        |   UNIQUE sales yang melakukan Order.
-        |
-        */
-
-        $areaOrderPerformance = $this->buildAreaOrderPerformance(
-            $stores,
-            $orderVisitReports,
-            $odooPartners
-        );
-
-        /*
-        |--------------------------------------------------------------------------
-        | Dashboard Response
-        |--------------------------------------------------------------------------
-        */
+        $areaOrderPerformance =
+            $this->buildAreaOrderPerformance(
+                $stores,
+                $orderVisitReports,
+                $odooPartners
+            );
 
         return Inertia::render(
             'Dashboard/Main_dashboard',
             [
                 'dashboardStats' => [
-                    // Today's Check-in
+                    'totalCheckInsToday' =>
+                        $totalCheckInsToday,
 
-                    'totalCheckInsToday' => $totalCheckInsToday,
+                    'activeSalesCount' =>
+                        $activeSalesCount,
 
-                    'activeSalesCount' => $activeSalesCount,
+                    'checkInTargetPerSales' =>
+                        $checkInTargetPerSales,
 
-                    'checkInTargetPerSales' => $checkInTargetPerSales,
+                    'checkInTargetToday' =>
+                        $checkInTargetToday,
 
-                    'checkInTargetToday' => $checkInTargetToday,
+                    'averageVisitDuration' =>
+                        $averageVisitDuration,
 
-                    // AVG Visit Duration
+                    'uniqueOrderStores' =>
+                        $orderVisitReports
+                            ->map(
+                                fn ($report) =>
+                                    $report->visit
+                                        ?->odoo_partner_id
+                            )
+                            ->filter()
+                            ->unique()
+                            ->count(),
 
-                    'averageVisitDuration' => $averageVisitDuration,
+                    'orderEvents' =>
+                        $orderVisitReports->count(),
 
-                    // Global Order Summary
+                    'totalSnapshotStores' =>
+                        $stores->count(),
+                ],
 
-                    'uniqueOrderStores' => $orderVisitReports
-                        ->map(
-                            fn ($report) =>
-                                $report->visit?->odoo_partner_id
-                        )
-                        ->filter()
-                        ->unique()
-                        ->count(),
+                'salesOrderChart' =>
+                    $salesOrderChart,
 
-                    'orderEvents' => $orderVisitReports->count(),
+                'stores' =>
+                    $areaOrderPerformance,
 
-                    'totalSnapshotStores' => $stores->count(),
-            ],
-                'salesOrderChart' => $salesOrderChart,
-
-                // Area Performance
-
-                'stores' => $areaOrderPerformance,
-
-                'outsideRadiusAlerts' => $outsideRadiusAlerts,
-
-                // Filters
+                'outsideRadiusAlerts' =>
+                    $outsideRadiusAlerts,
 
                 'filters' => [
-                    'date_from' => $dateFrom?->format('Y-m-d'),
-                    'date_to' => $dateTo?->format('Y-m-d'),
+                    'date_from' =>
+                        $dateFrom?->format('Y-m-d'),
 
-                    'month' => $dateFrom
-                        ? $dateFrom->month
-                        : null,
+                    'date_to' =>
+                        $dateTo?->format('Y-m-d'),
 
-                    'year' => $dateFrom
-                        ? $dateFrom->year
-                        : null,
+                    'month' =>
+                        $dateFrom
+                            ? $dateFrom->month
+                            : null,
+
+                    'year' =>
+                        $dateFrom
+                            ? $dateFrom->year
+                            : null,
                 ],
             ]
         );
     }
 
     /**
-     * =========================================================================
-     * LOAD RETENTION SNAPSHOT
-     * =========================================================================
-     *
-     * Snapshot Excel terbaru adalah master population.
+     * Load the latest retention snapshot.
      */
     private function loadRetentionSnapshot(
         OdooService $odooService
@@ -367,27 +285,15 @@ class DashboardController extends Controller
             return collect();
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | Ambil file terbaru berdasarkan modified time
-        |--------------------------------------------------------------------------
-        */
-
         usort(
             $files,
-            function ($a, $b) {
-                return File::lastModified($b)
-                    <=> File::lastModified($a);
-            }
+            fn ($a, $b) =>
+                File::lastModified($b)
+                <=>
+                File::lastModified($a)
         );
 
         $latestFile = $files[0];
-
-        /*
-        |--------------------------------------------------------------------------
-        | Cache Snapshot
-        |--------------------------------------------------------------------------
-        */
 
         $cacheKey = 'dashboard:retention:stores:' . hash(
             'sha256',
@@ -410,31 +316,13 @@ class DashboardController extends Controller
                         return [];
                     }
 
-                    /*
-                    |--------------------------------------------------------------------------
-                    | Partner IDs dari snapshot
-                    |--------------------------------------------------------------------------
-                    */
-
                     $partnerIds = $excelData
                         ->pluck('partner_id')
                         ->filter()
-                        ->map(
-                            fn ($id) => (int) $id
-                        )
+                        ->map(fn ($id) => (int) $id)
                         ->unique()
                         ->values()
                         ->toArray();
-
-                    /*
-                    |--------------------------------------------------------------------------
-                    | Odoo Partner
-                    |--------------------------------------------------------------------------
-                    |
-                    | Batch request agar tidak melakukan query
-                    | satu partner satu request.
-                    |
-                    */
 
                     $odooStores = collect();
 
@@ -442,8 +330,8 @@ class DashboardController extends Controller
                         array_chunk($partnerIds, 500)
                         as $partnerChunk
                     ) {
-                        $odooStoresRaw = $odooService
-                            ->execute_kw(
+                        $odooStoresRaw =
+                            $odooService->execute_kw(
                                 'res.partner',
                                 'search_read',
                                 [
@@ -451,9 +339,9 @@ class DashboardController extends Controller
                                         [
                                             'id',
                                             'in',
-                                            $partnerChunk
-                                        ]
-                                    ]
+                                            $partnerChunk,
+                                        ],
+                                    ],
                                 ],
                                 [
                                     'fields' => [
@@ -464,7 +352,7 @@ class DashboardController extends Controller
                                         'partner_latitude',
                                         'partner_longitude',
                                         'email',
-                                    ]
+                                    ],
                                 ]
                             );
 
@@ -477,12 +365,6 @@ class DashboardController extends Controller
                         fn ($store) =>
                             (int) $store['id']
                     );
-
-                    /*
-                    |--------------------------------------------------------------------------
-                    | Normalize Snapshot
-                    |--------------------------------------------------------------------------
-                    */
 
                     return $excelData
                         ->map(
@@ -502,12 +384,6 @@ class DashboardController extends Controller
                                         $partnerId
                                     );
 
-                                /*
-                                |--------------------------------------------------------------------------
-                                | Normalize last order date
-                                |--------------------------------------------------------------------------
-                                */
-
                                 $lastOrderDate = null;
 
                                 if (
@@ -522,9 +398,7 @@ class DashboardController extends Controller
                                         $lastOrderDate =
                                             $row[
                                                 'last_order_date'
-                                            ]->format(
-                                                'Y-m-d'
-                                            );
+                                            ]->format('Y-m-d');
                                     } else {
                                         $lastOrderDate =
                                             substr(
@@ -543,37 +417,27 @@ class DashboardController extends Controller
 
                                     'partner_name' =>
                                         (string) (
-                                            $row[
-                                                'partner_name'
-                                            ] ?? ''
+                                            $row['partner_name']
+                                            ?? ''
                                         ),
-
-                                    /*
-                                    |--------------------------------------------------------------------------
-                                    | KOTA MASTER
-                                    |--------------------------------------------------------------------------
-                                    */
 
                                     'kota' =>
                                         trim(
                                             (string) (
-                                                $row['kota']
-                                                ?? ''
+                                                $row['kota'] ?? ''
                                             )
                                         ),
 
                                     'sales_name' =>
                                         (string) (
-                                            $row[
-                                                'sales_name'
-                                            ] ?? 'Unassigned'
+                                            $row['sales_name']
+                                            ?? 'Unassigned'
                                         ),
 
                                     'phone' =>
                                         (string) (
-                                            $row[
-                                                'phone_clean'
-                                            ] ?? ''
+                                            $row['phone_clean']
+                                            ?? ''
                                         ),
 
                                     'last_order_date' =>
@@ -581,30 +445,24 @@ class DashboardController extends Controller
 
                                     'days_since' =>
                                         (int) (
-                                            $row[
-                                                'days_since'
-                                            ] ?? 0
+                                            $row['days_since'] ?? 0
                                         ),
 
                                     'weeks_since' =>
                                         (int) (
-                                            $row[
-                                                'weeks_since'
-                                            ] ?? 0
+                                            $row['weeks_since'] ?? 0
                                         ),
 
                                     'retensi_status' =>
                                         (string) (
-                                            $row[
-                                                'retensi_status'
-                                            ] ?? 'DEAD ZONE'
+                                            $row['retensi_status']
+                                            ?? 'DEAD ZONE'
                                         ),
 
                                     'aktif_group' =>
                                         (string) (
-                                            $row[
-                                                'aktif_group'
-                                            ] ?? 'NON_AKTIF'
+                                            $row['aktif_group']
+                                            ?? 'NON_AKTIF'
                                         ),
 
                                     'avg_retensi_weeks' =>
@@ -630,21 +488,12 @@ class DashboardController extends Controller
 
                                     'priority' =>
                                         (int) (
-                                            $row[
-                                                'priority'
-                                            ] ?? 99
+                                            $row['priority'] ?? 99
                                         ),
 
-                                    /*
-                                    |--------------------------------------------------------------------------
-                                    | Odoo enrichment
-                                    |--------------------------------------------------------------------------
-                                    */
-
                                     'alamat' =>
-                                        $storeDetail[
-                                            'street'
-                                        ] ?? null,
+                                        $storeDetail['street']
+                                        ?? null,
 
                                     'latitude' =>
                                         isset(
@@ -679,9 +528,8 @@ class DashboardController extends Controller
                                             : null,
 
                                     'email' =>
-                                        $storeDetail[
-                                            'email'
-                                        ] ?? null,
+                                        $storeDetail['email']
+                                        ?? null,
                                 ];
                             }
                         )
@@ -691,56 +539,24 @@ class DashboardController extends Controller
                 }
             )
         )
-            /*
-            |--------------------------------------------------------------------------
-            | Snapshot validation
-            |--------------------------------------------------------------------------
-            */
-
             ->filter(
                 fn ($store) =>
                     !empty($store['partner_id'])
-                    &&
-                    !empty($store['kota'])
+                    && !empty($store['kota'])
             )
-
-            /*
-            |--------------------------------------------------------------------------
-            | Satu partner hanya satu kali
-            |--------------------------------------------------------------------------
-            */
-
             ->unique('partner_id')
             ->values();
     }
 
     /**
-     * =========================================================================
-     * GET ORDER VISIT REPORTS
-     * =========================================================================
+     * Get visit reports containing Order activity.
      */
     private function getOrderVisitReports(
         ?Carbon $dateFrom,
         ?Carbon $dateTo
     ): Collection {
         $query = VisitReport::query()
-            /*
-            |--------------------------------------------------------------------------
-            | activities adalah JSON array
-            |--------------------------------------------------------------------------
-            |
-            | Contoh:
-            |
-            | ["Visit", "Order", "Payment"]
-            |
-            | Selama mengandung "Order", report dihitung.
-            |
-            */
-            ->whereJsonContains(
-                'activities',
-                'Order'
-            )
-
+            ->whereJsonContains('activities', 'Order')
             ->whereHas(
                 'visit',
                 function ($query) use (
@@ -764,29 +580,23 @@ class DashboardController extends Controller
                     }
                 }
             )
-
-            ->with(
-                [
-                    'visit' => function ($query) {
-                        $query->select(
-                            [
-                                'id',
-                                'odoo_partner_id',
-                                'sales_id',
-                                'visit_date',
-                            ]
-                        );
-                    },
-                ]
-            );
+            ->with([
+                'visit' => function ($query) {
+                    $query->select([
+                        'id',
+                        'odoo_partner_id',
+                        'sales_id',
+                        'visit_date',
+                    ]);
+                },
+            ]);
 
         return $query
             ->get()
             ->filter(
                 fn ($report) =>
                     $report->visit
-                    &&
-                    !empty(
+                    && !empty(
                         $report->visit->odoo_partner_id
                     )
             )
@@ -794,11 +604,7 @@ class DashboardController extends Controller
     }
 
     /**
-     * =========================================================================
-     * LOAD ODOO PARTNERS
-     * =========================================================================
-     *
-     * Odoo tetap diakses menggunakan OdooService XML-RPC.
+     * Load Odoo partners by IDs.
      */
     private function loadOdooPartners(
         OdooService $odooService,
@@ -831,9 +637,9 @@ class DashboardController extends Controller
                         [
                             'id',
                             'in',
-                            $partnerChunk
-                        ]
-                    ]
+                            $partnerChunk,
+                        ],
+                    ],
                 ],
                 [
                     'fields' => [
@@ -862,6 +668,9 @@ class DashboardController extends Controller
         );
     }
 
+    /**
+     * Build sales order performance.
+     */
     private function buildSalesOrderChart(
         Collection $orderVisitReports
     ): Collection {
@@ -885,12 +694,6 @@ class DashboardController extends Controller
                         )
                         ->values();
 
-                    /*
-                    |--------------------------------------------------------------------------
-                    | Unique stores
-                    |--------------------------------------------------------------------------
-                    */
-
                     $uniqueStoreIds = $reports
                         ->map(
                             fn ($report) =>
@@ -898,27 +701,9 @@ class DashboardController extends Controller
                                     ?->odoo_partner_id
                         )
                         ->filter()
-                        ->map(
-                            fn ($id) => (int) $id
-                        )
+                        ->map(fn ($id) => (int) $id)
                         ->unique()
                         ->values();
-
-                    /*
-                    |--------------------------------------------------------------------------
-                    | Weekly data
-                    |--------------------------------------------------------------------------
-                    |
-                    | Weekly menggunakan unique store per minggu.
-                    |
-                    | Jadi:
-                    |
-                    | Store A order minggu 1
-                    | Store A order minggu 2
-                    |
-                    | akan dihitung di masing-masing minggu.
-                    |
-                    */
 
                     $weeklyData = [
                         'week_1' => 0,
@@ -949,15 +734,12 @@ class DashboardController extends Controller
 
                         $key = "week_{$weekNumber}";
 
-                        if (
-                            !isset(
-                                $weeklyStoreIds[$key]
-                            )
-                        ) {
+                        if (!isset($weeklyStoreIds[$key])) {
                             continue;
                         }
 
-                        $partnerId = $visit->odoo_partner_id;
+                        $partnerId =
+                            $visit->odoo_partner_id;
 
                         if ($partnerId) {
                             $weeklyStoreIds[$key]->push(
@@ -977,31 +759,14 @@ class DashboardController extends Controller
                     }
 
                     return [
-                        'salesId' =>
-                            $user->id,
-
+                        'salesId' => $user->id,
                         'name' =>
                             $user->name
                             ?? 'Unknown Sales',
-
-                        /*
-                        |--------------------------------------------------------------------------
-                        | MAIN METRIC
-                        |--------------------------------------------------------------------------
-                        */
-
                         'orders' =>
                             $uniqueStoreIds->count(),
-
-                        /*
-                        |--------------------------------------------------------------------------
-                        | SECONDARY METRIC
-                        |--------------------------------------------------------------------------
-                        */
-
                         'orderEvents' =>
                             $reports->count(),
-
                         'weekly' =>
                             $weeklyData,
                     ];
@@ -1012,39 +777,23 @@ class DashboardController extends Controller
     }
 
     /**
-     * =========================================================================
-     * AREA ORDER PERFORMANCE
-     * =========================================================================
+     * Build area order performance.
      */
     private function buildAreaOrderPerformance(
         Collection $stores,
         Collection $orderVisitReports,
         Collection $odooPartners
     ): Collection {
-        /*
-        |--------------------------------------------------------------------------
-        | Snapshot menjadi master partner → kota
-        |--------------------------------------------------------------------------
-        */
-
-        $snapshotByPartner = $stores
-            ->keyBy(
-                fn ($store) =>
-                    (int) $store['partner_id']
-            );
-
-        /*
-        |--------------------------------------------------------------------------
-        | Order events dikelompokkan berdasarkan partner
-        |--------------------------------------------------------------------------
-        */
+        $snapshotByPartner = $stores->keyBy(
+            fn ($store) =>
+                (int) $store['partner_id']
+        );
 
         $orderVisitsByPartner = $orderVisitReports
             ->filter(
                 fn ($report) =>
                     $report->visit
-                    &&
-                    !empty(
+                    && !empty(
                         $report->visit->odoo_partner_id
                     )
             )
@@ -1052,17 +801,6 @@ class DashboardController extends Controller
                 fn ($report) =>
                     (int) $report->visit->odoo_partner_id
             );
-
-        /*
-        |--------------------------------------------------------------------------
-        | Hanya partner yang:
-        |
-        | 1. Ada di snapshot
-        | 2. Memiliki Order
-        |
-        | yang masuk numerator.
-        |--------------------------------------------------------------------------
-        */
 
         $orderedSnapshotPartners = $orderVisitsByPartner
             ->filter(
@@ -1072,20 +810,11 @@ class DashboardController extends Controller
                     )
             );
 
-        /*
-        |--------------------------------------------------------------------------
-        | Group semua snapshot stores berdasarkan kota
-        |--------------------------------------------------------------------------
-        */
-
         return $stores
             ->groupBy(
                 fn ($store) =>
                     trim(
-                        (string) (
-                            $store['kota']
-                            ?? ''
-                        )
+                        (string) ($store['kota'] ?? '')
                     )
             )
             ->filter(
@@ -1101,60 +830,26 @@ class DashboardController extends Controller
                     $orderVisitsByPartner,
                     $odooPartners
                 ) {
-                    /*
-                    |--------------------------------------------------------------------------
-                    | ALL STORES
-                    |--------------------------------------------------------------------------
-                    |
-                    | Denominator.
-                    |--------------------------------------------------------------------------
-                    */
-
                     $allPartnerIds = $cityStores
                         ->pluck('partner_id')
-                        ->map(
-                            fn ($id) => (int) $id
-                        )
+                        ->map(fn ($id) => (int) $id)
                         ->unique()
                         ->values();
 
                     $totalStores =
                         $allPartnerIds->count();
 
-                    /*
-                    |--------------------------------------------------------------------------
-                    | UNIQUE ORDERED STORES
-                    |--------------------------------------------------------------------------
-                    |
-                    | Satu store order 5 kali:
-                    |
-                    | tetap dihitung 1.
-                    |--------------------------------------------------------------------------
-                    */
-
                     $orderedPartnerIds = $allPartnerIds
                         ->filter(
                             fn ($partnerId) =>
-                                $orderedSnapshotPartners
-                                    ->has(
-                                        $partnerId
-                                    )
+                                $orderedSnapshotPartners->has(
+                                    $partnerId
+                                )
                         )
                         ->values();
 
                     $uniqueOrders =
                         $orderedPartnerIds->count();
-
-                    /*
-                    |--------------------------------------------------------------------------
-                    | RAW ORDER EVENTS
-                    |--------------------------------------------------------------------------
-                    |
-                    | Kalau Store A order 5 kali:
-                    |
-                    | order_events = 5
-                    |--------------------------------------------------------------------------
-                    */
 
                     $orderEvents = $orderedPartnerIds
                         ->sum(
@@ -1167,66 +862,35 @@ class DashboardController extends Controller
                                     ->count()
                         );
 
-                    /*
-                    |--------------------------------------------------------------------------
-                    | UNIQUE SALES / REPS
-                    |--------------------------------------------------------------------------
-                    */
-
                     $salesIds = $orderedPartnerIds
                         ->flatMap(
-                            function ($partnerId)
-                                use (
-                                    $orderVisitsByPartner
-                                ) {
-                                    return
-                                        $orderVisitsByPartner
-                                            ->get(
-                                                $partnerId,
-                                                collect()
-                                            )
-                                            ->map(
-                                                fn ($report) =>
-                                                    $report
-                                                        ->visit
-                                                        ?->sales_id
-                                            );
-                                }
+                            function ($partnerId) use (
+                                $orderVisitsByPartner
+                            ) {
+                                return $orderVisitsByPartner
+                                    ->get(
+                                        $partnerId,
+                                        collect()
+                                    )
+                                    ->map(
+                                        fn ($report) =>
+                                            $report->visit
+                                                ?->sales_id
+                                    );
+                            }
                         )
                         ->filter()
-                        ->map(
-                            fn ($id) => (int) $id
-                        )
+                        ->map(fn ($id) => (int) $id)
                         ->unique()
                         ->values();
 
                     $reps = $salesIds->count();
 
-                    /*
-                    |--------------------------------------------------------------------------
-                    | PERFORMANCE
-                    |--------------------------------------------------------------------------
-                    */
-
-                    $percentage =
-                        $totalStores > 0
-                            ? round(
-                                (
-                                    $uniqueOrders
-                                    / $totalStores
-                                ) * 100
-                            )
-                            : 0;
-
-                    /*
-                    |--------------------------------------------------------------------------
-                    | Odoo partner count
-                    |--------------------------------------------------------------------------
-                    |
-                    | Ini hanya enrichment/validasi.
-                    | Tidak menentukan denominator.
-                    |--------------------------------------------------------------------------
-                    */
+                    $percentage = $totalStores > 0
+                        ? round(
+                            ($uniqueOrders / $totalStores) * 100
+                        )
+                        : 0;
 
                     $odooMatchedOrders =
                         $orderedPartnerIds
@@ -1241,61 +905,18 @@ class DashboardController extends Controller
                     return [
                         'name' =>
                             $city,
-
-                        /*
-                        |--------------------------------------------------------------------------
-                        | Unique sales
-                        |--------------------------------------------------------------------------
-                        */
-
                         'reps' =>
                             $reps,
-
-                        /*
-                        |--------------------------------------------------------------------------
-                        | MAIN METRIC
-                        |--------------------------------------------------------------------------
-                        */
-
                         'visited' =>
                             $uniqueOrders,
-
                         'unique_orders' =>
                             $uniqueOrders,
-
-                        /*
-                        |--------------------------------------------------------------------------
-                        | SECONDARY METRIC
-                        |--------------------------------------------------------------------------
-                        */
-
                         'order_events' =>
                             $orderEvents,
-
-                        /*
-                        |--------------------------------------------------------------------------
-                        | ALL STORES IN SNAPSHOT
-                        |--------------------------------------------------------------------------
-                        */
-
                         'total' =>
                             $totalStores,
-
-                        /*
-                        |--------------------------------------------------------------------------
-                        | PERFORMANCE %
-                        |--------------------------------------------------------------------------
-                        */
-
                         'percentage' =>
                             $percentage,
-
-                        /*
-                        |--------------------------------------------------------------------------
-                        | Odoo enrichment info
-                        |--------------------------------------------------------------------------
-                        */
-
                         'odoo_matched_orders' =>
                             $odooMatchedOrders,
                     ];
@@ -1303,13 +924,6 @@ class DashboardController extends Controller
             )
             ->sort(
                 function ($a, $b) {
-                    /*
-                    |--------------------------------------------------------------------------
-                    | Primary sort:
-                    | unique stores ordered
-                    |--------------------------------------------------------------------------
-                    */
-
                     if (
                         $a['visited']
                         !==
@@ -1320,18 +934,282 @@ class DashboardController extends Controller
                             $a['visited'];
                     }
 
-                    /*
-                    |--------------------------------------------------------------------------
-                    | Secondary sort:
-                    | percentage
-                    |--------------------------------------------------------------------------
-                    */
-
                     return $b['percentage']
                         <=>
                         $a['percentage'];
                 }
             )
             ->values();
+    }
+
+    /**
+     * Export dashboard summary to Excel.
+     */
+    public function exportSummary(
+        Request $request,
+        OdooService $odooService
+    ): BinaryFileResponse  {
+        $dateFrom = $request->filled('date_from')
+            ? Carbon::parse(
+                $request->date_from
+            )->startOfDay()
+            : now()->startOfDay();
+
+        $dateTo = $request->filled('date_to')
+            ? Carbon::parse(
+                $request->date_to
+            )->endOfDay()
+            : now()->endOfDay();
+
+        if ($dateFrom->gt($dateTo)) {
+            abort(422, 'Invalid date range.');
+        }
+
+        $checkIns = StoreVisit::query()
+            ->whereBetween('visit_date', [
+                $dateFrom->toDateString(),
+                $dateTo->toDateString(),
+            ])
+            ->whereNotNull('check_in_at')
+            ->count();
+
+        $activeSales = User::query()
+            ->where('role', 'sales')
+            ->where('status', 'active')
+            ->count();
+
+        $targetPerSales = 5;
+        $targetCheckIns =
+            $activeSales * $targetPerSales;
+
+        $averageSeconds = StoreVisit::query()
+            ->whereBetween('visit_date', [
+                $dateFrom->toDateString(),
+                $dateTo->toDateString(),
+            ])
+            ->whereNotNull('check_in_at')
+            ->whereNotNull('check_out_at')
+            ->selectRaw(
+                'AVG(
+                    TIMESTAMPDIFF(
+                        SECOND,
+                        check_in_at,
+                        check_out_at
+                    )
+                ) as average_seconds'
+            )
+            ->value('average_seconds');
+
+        $averageSeconds = (int) round(
+            (float) ($averageSeconds ?? 0)
+        );
+
+        $hours = intdiv(
+            $averageSeconds,
+            3600
+        );
+
+        $minutes = intdiv(
+            $averageSeconds % 3600,
+            60
+        );
+
+        $seconds = $averageSeconds % 60;
+
+        $averageVisitDuration = $hours > 0
+            ? sprintf(
+                '%dh %02dm %02ds',
+                $hours,
+                $minutes,
+                $seconds
+            )
+            : sprintf(
+                '%dm %02ds',
+                $minutes,
+                $seconds
+            );
+
+        $orderReports = $this->getOrderVisitReports(
+            $dateFrom,
+            $dateTo
+        );
+
+        $uniqueOrderedStores = $orderReports
+            ->pluck('visit.odoo_partner_id')
+            ->filter()
+            ->unique()
+            ->count();
+
+        $orderEvents = $orderReports->count();
+
+        $snapshot = $this->loadRetentionSnapshot(
+            $odooService
+        );
+
+        $totalSnapshotStores =
+            $snapshot->count();
+
+        $storeCoverage = $totalSnapshotStores > 0
+            ? round(
+                ($uniqueOrderedStores / $totalSnapshotStores) * 100,
+                1
+            )
+            : 0;
+
+        $salesPerformance = $this->buildSalesOrderChart(
+                $orderReports
+            )->values()->all();
+
+        $orderedPartnerIds = $orderReports
+            ->pluck('visit.odoo_partner_id')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        $odooPartners = $this->loadOdooPartners(
+            $odooService,
+            $orderedPartnerIds
+        );
+
+        $areaPerformance = $this->buildAreaOrderPerformance(
+                $snapshot,
+                $orderReports,
+                $odooPartners
+            )->values()->all();
+
+        $radiusExceptions = VisitReport::query()
+            ->with([
+                'visit.sales:id,name,username',
+                'visit:id,odoo_partner_id,sales_id,visit_date',
+            ])
+            ->where('is_outside_radius', true)
+            ->whereHas(
+                'visit',
+                function ($query) use (
+                    $dateFrom,
+                    $dateTo
+                ) {
+                    $query->whereBetween(
+                        'visit_date',
+                        [
+                            $dateFrom->toDateString(),
+                            $dateTo->toDateString(),
+                        ]
+                    );
+                }
+            )
+            ->latest('location_captured_at')
+            ->get();
+
+        $radiusPartnerIds = $radiusExceptions
+            ->pluck('visit.odoo_partner_id')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        $radiusPartners = $this->loadOdooPartners(
+            $odooService,
+            $radiusPartnerIds
+        );
+
+        $radiusData = $radiusExceptions
+            ->map(
+                function (
+                    VisitReport $report
+                ) use (
+                    $radiusPartners
+                ) {
+                    $visit = $report->visit;
+
+                    $partner = $radiusPartners->get(
+                        (int) $visit->odoo_partner_id
+                    );
+
+                    return [
+                        'date' =>
+                            $visit->visit_date
+                                ?->format('Y-m-d'),
+
+                        'sales' =>
+                            $visit->sales?->name ?? '-',
+
+                        'username' =>
+                            $visit->sales?->username ?? '-',
+
+                        'store' =>
+                            $partner['name']
+                            ?? $partner['display_name']
+                            ?? "Partner #{$visit->odoo_partner_id}",
+
+                        'distance' =>
+                            $report->distance_from_store,
+
+                        'latitude' =>
+                            $report->sales_latitude,
+
+                        'longitude' =>
+                            $report->sales_longitude,
+
+                        'captured_at' =>
+                            $report->location_captured_at
+                                ?->format(
+                                    'Y-m-d H:i:s'
+                                ),
+                    ];
+                }
+            )
+            ->values()
+            ->all();
+
+        $filename = sprintf(
+            'dashboard-summary-%s-%s.xlsx',
+            $dateFrom->format('Ymd'),
+            $dateTo->format('Ymd')
+        );
+
+        $tempPath = storage_path(
+            'app/private/' . $filename
+        );
+
+        $export = new DashboardSummaryExport(
+            dateFrom: $dateFrom,
+            dateTo: $dateTo,
+            summary: [
+                'total_check_ins' =>
+                    $checkIns,
+
+                'active_sales' =>
+                    $activeSales,
+
+                'target_check_ins' =>
+                    $targetCheckIns,
+
+                'average_visit_duration' =>
+                    $averageVisitDuration,
+
+                'ordered_stores' =>
+                    $uniqueOrderedStores,
+
+                'order_events' =>
+                    $orderEvents,
+
+                'store_coverage' =>
+                    $storeCoverage,
+            ],
+            salesPerformance:
+                $salesPerformance,
+            areaPerformance:
+                $areaPerformance,
+            radiusExceptions:
+                $radiusData,
+        );
+
+        $export->download($tempPath);
+
+        return response()
+            ->download($tempPath, $filename)
+            ->deleteFileAfterSend(true);
     }
 }

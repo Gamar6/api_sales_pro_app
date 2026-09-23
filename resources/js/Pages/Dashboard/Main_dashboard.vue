@@ -1,20 +1,15 @@
 <script setup>
-import { computed } from "vue";
+import { computed, ref } from "vue";
+import { router } from "@inertiajs/vue3";
 import AdminLayout from "@/Layouts/AdminLayout.vue";
 
 import DashboardHeader from "./components/DashboardHeader.vue";
 import DashboardKpiGrid from "./components/DashboardKpiGrid.vue";
 import DashboardQuickAccess from "./components/DashboardQuickAccess.vue";
 import DashboardOverview from "./components/DashboardOverview.vue";
+import DashboardExportModal from "./components/DashboardExportModal.vue";
 
-import {
-    clusters,
-    kpiConfig,
-    modules,
-    products,
-    stores as staticStores,
-    telemetryFeed,
-} from "./dashboardData";
+import { kpiConfig, telemetryFeed } from "./dashboardData";
 
 const props = defineProps({
     dashboardStats: {
@@ -40,14 +35,40 @@ const props = defineProps({
 
 /*
 |--------------------------------------------------------------------------
-| KPI & Metrics
+| Export Modal
+|--------------------------------------------------------------------------
+*/
+
+const showExportModal = ref(false);
+
+const openExportModal = () => {
+    showExportModal.value = true;
+};
+
+const closeExportModal = () => {
+    showExportModal.value = false;
+};
+
+const exportDashboard = ({ date_from, date_to }) => {
+    const params = new URLSearchParams({
+        date_from,
+        date_to,
+    });
+
+    window.location.href = `${route("dashboard.export")}?${params.toString()}`;
+
+    showExportModal.value = false;
+};
+
+/*
+|--------------------------------------------------------------------------
+| Dashboard KPIs
 |--------------------------------------------------------------------------
 */
 
 const kpis = computed(() => {
     const stats = props.dashboardStats;
 
-    // Computed store metrics derived from dashboardStats
     const totalStores = Number(stats.totalSnapshotStores ?? 0);
     const orderedStores = Number(stats.uniqueOrderStores ?? 0);
     const orderEvents = Number(stats.orderEvents ?? 0);
@@ -57,17 +78,19 @@ const kpis = computed(() => {
             ? ((orderedStores / totalStores) * 100).toFixed(1)
             : "0.0";
 
+    /*
+    |--------------------------------------------------------------------------
+    | Check-ins
+    |--------------------------------------------------------------------------
+    */
+
     const totalCheckIns = Number(stats.totalCheckInsToday ?? 0);
     const activeSalesCount = Number(stats.activeSalesCount ?? 0);
     const targetPerSales = Number(stats.checkInTargetPerSales ?? 5);
+
     const targetToday = Number(
         stats.checkInTargetToday ?? activeSalesCount * targetPerSales,
     );
-    const averageVisitDuration = stats.averageVisitDuration ?? "0m 00s";
-
-    // ─────────────────────────────
-    // Check-in
-    // ─────────────────────────────
 
     const checkInProgress =
         targetToday > 0
@@ -83,9 +106,13 @@ const kpis = computed(() => {
               ? "Shift target achieved"
               : `${remainingCheckIns} visits to target`;
 
-    // ─────────────────────────────
-    // Visit duration
-    // ─────────────────────────────
+    /*
+    |--------------------------------------------------------------------------
+    | Visit Duration
+    |--------------------------------------------------------------------------
+    */
+
+    const averageVisitDuration = stats.averageVisitDuration ?? "0m 00s";
 
     const hasCompletedVisits = averageVisitDuration !== "0m 00s";
 
@@ -93,22 +120,33 @@ const kpis = computed(() => {
         ? "Within expected range"
         : "No completed visits today";
 
+    /*
+    |--------------------------------------------------------------------------
+    | KPI Cards
+    |--------------------------------------------------------------------------
+    */  
+
     return [
         {
             key: "check-ins",
             label: kpiConfig.checkIns.label,
             value: totalCheckIns.toLocaleString(),
             suffix: kpiConfig.checkIns.suffix,
+
             progress: Number(checkInProgress.toFixed(1)),
+
             badge:
                 targetToday > 0
                     ? `SHIFT GOAL: ${targetToday}`
                     : "NO ACTIVE SALES",
+
             context:
                 targetToday > 0
                     ? `${activeSalesCount} active sales · ${targetPerSales} visits each`
                     : "No active sales available",
+
             detail: checkInDetail,
+
             status:
                 targetToday === 0
                     ? "neutral"
@@ -122,11 +160,15 @@ const kpis = computed(() => {
             label: kpiConfig.visitDuration.label,
             value: averageVisitDuration,
             suffix: kpiConfig.visitDuration.suffix,
+
             badge: `GUIDE: ${kpiConfig.visitDuration.guide}`,
+
             context: visitDurationDetail,
+
             detail: hasCompletedVisits
                 ? "Based on completed visits today"
                 : "Completed check-outs will appear here",
+
             status: hasCompletedVisits ? "success" : "neutral",
         },
 
@@ -135,16 +177,19 @@ const kpis = computed(() => {
             label: kpiConfig.activeSales.label,
             value: activeSalesCount.toLocaleString(),
             suffix: kpiConfig.activeSales.suffix,
+
             context:
                 activeSalesCount > 0
                     ? `${activeSalesCount} active sales currently available`
                     : "No active sales currently available",
+
             detail:
                 activeSalesCount > 0
                     ? `Daily capacity: ${(
                           activeSalesCount * targetPerSales
                       ).toLocaleString()} visits`
                     : "Daily visit capacity: 0",
+
             status: activeSalesCount > 0 ? "success" : "neutral",
         },
 
@@ -153,11 +198,14 @@ const kpis = computed(() => {
             label: kpiConfig.orderedStores.label,
             value: orderedStores.toLocaleString(),
             suffix: kpiConfig.orderedStores.suffix,
+
             context:
                 totalStores > 0
                     ? `${orderedStores.toLocaleString()} / ${totalStores.toLocaleString()} stores ordered`
                     : "No stores available",
+
             detail: `${orderedStorePercentage}% store coverage · ${orderEvents.toLocaleString()} order events`,
+
             status: orderedStores > 0 ? "success" : "neutral",
         },
     ];
@@ -170,30 +218,20 @@ const kpis = computed(() => {
             <main class="w-full">
                 <div class="flex w-full flex-col">
                     <div class="flex flex-col gap-space-xl p-space-xl">
-                        <!-- ================================================= -->
-                        <!-- HEADER -->
-                        <!-- ================================================= -->
+                        <!-- Header -->
+                        <DashboardHeader @export="openExportModal" />
 
-                        <DashboardHeader />
-
-                        <!-- ================================================= -->
-                        <!-- KPI -->
-                        <!-- ================================================= -->
-
+                        <!-- KPI Cards -->
                         <DashboardKpiGrid :kpis="kpis" />
 
-                        <!-- ================================================= -->
-                        <!-- QUICK ACCESS -->
-                        <!-- ================================================= -->
-
+                        <!-- Quick Access -->
                         <DashboardQuickAccess />
 
-                        <!-- ================================================= -->
-                        <!-- OPERATIONAL OVERVIEW -->
-                        <!-- ================================================= -->
-
+                        <!-- Dashboard Overview -->
                         <DashboardOverview
+                            :dashboard-stats="props.dashboardStats"
                             :stores="props.stores"
+                            :telemetry="telemetryFeed"
                             :sales-order-chart="props.salesOrderChart"
                             :outside-radius-alerts="props.outsideRadiusAlerts"
                         />
@@ -201,5 +239,12 @@ const kpis = computed(() => {
                 </div>
             </main>
         </div>
+
+        <!-- Export Period Modal -->
+        <DashboardExportModal
+            :open="showExportModal"
+            @close="closeExportModal"
+            @export="exportDashboard"
+        />
     </AdminLayout>
 </template>
