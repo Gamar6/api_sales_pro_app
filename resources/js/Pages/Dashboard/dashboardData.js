@@ -27,6 +27,17 @@ export const kpiConfig = {
     visitDuration: {
         label: "Avg. Visit Duration",
         suffix: "/ store",
+        guide: "20–45m",
+    },
+
+    activeSales: {
+        label: "Active Sales",
+        suffix: "People",
+    },
+
+    orderedStores: {
+        label: "Ordered Stores",
+        suffix: "Stores",
     },
 };
 
@@ -53,6 +64,7 @@ export const clusters = [
         percentage: 82,
     },
 ];
+
 
 export const telemetryFeed = [
     {

@@ -290,34 +290,34 @@ class DashboardController extends Controller
             'Dashboard/Main_dashboard',
             [
                 'dashboardStats' => [
-                // Today's Check-in
+                    // Today's Check-in
 
-                'totalCheckInsToday' => $totalCheckInsToday,
+                    'totalCheckInsToday' => $totalCheckInsToday,
 
-                'activeSalesCount' => $activeSalesCount,
+                    'activeSalesCount' => $activeSalesCount,
 
-                'checkInTargetPerSales' => $checkInTargetPerSales,
+                    'checkInTargetPerSales' => $checkInTargetPerSales,
 
-                'checkInTargetToday' => $checkInTargetToday,
+                    'checkInTargetToday' => $checkInTargetToday,
 
-                // AVG Visit Duration
+                    // AVG Visit Duration
 
-                'averageVisitDuration' => $averageVisitDuration,
+                    'averageVisitDuration' => $averageVisitDuration,
 
-                // Global Order Summary
+                    // Global Order Summary
 
-                'uniqueOrderStores' => $orderVisitReports
-                    ->map(
-                        fn ($report) =>
-                            $report->visit?->odoo_partner_id
-                    )
-                    ->filter()
-                    ->unique()
-                    ->count(),
+                    'uniqueOrderStores' => $orderVisitReports
+                        ->map(
+                            fn ($report) =>
+                                $report->visit?->odoo_partner_id
+                        )
+                        ->filter()
+                        ->unique()
+                        ->count(),
 
-                'orderEvents' => $orderVisitReports->count(),
+                    'orderEvents' => $orderVisitReports->count(),
 
-                'totalSnapshotStores' => $stores->count(),
+                    'totalSnapshotStores' => $stores->count(),
             ],
                 'salesOrderChart' => $salesOrderChart,
 
@@ -862,17 +862,6 @@ class DashboardController extends Controller
         );
     }
 
-    /**
-     * =========================================================================
-     * SALES ORDER CHART
-     * =========================================================================
-     *
-     * Metric utama:
-     *   orders = unique stores
-     *
-     * Metric sekunder:
-     *   orderEvents = raw order events
-     */
     private function buildSalesOrderChart(
         Collection $orderVisitReports
     ): Collection {

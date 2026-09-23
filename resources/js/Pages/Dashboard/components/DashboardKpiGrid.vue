@@ -9,14 +9,14 @@ defineProps({
 
 <template>
     <section
-        class="grid grid-cols-1 gap-space-lg sm:grid-cols-2 xl:grid-cols-2"
+        class="grid grid-cols-1 gap-space-lg sm:grid-cols-2 xl:grid-cols-4"
     >
         <article
             v-for="kpi in kpis"
             :key="kpi.key ?? kpi.label"
-            class="relative flex min-h-[180px] flex-col justify-between overflow-hidden rounded-lg bg-surface-container-lowest p-space-lg shadow-sm"
+            class="relative flex min-h-[190px] flex-col justify-between overflow-hidden rounded-lg bg-surface-container-lowest p-space-lg shadow-sm"
         >
-            <!-- Top Accent -->
+            <!-- Top accent -->
             <div
                 class="absolute left-0 right-0 top-0 h-1 bg-surface-container"
             ></div>
@@ -37,7 +37,7 @@ defineProps({
                 </span>
             </div>
 
-            <!-- Main Metric -->
+            <!-- Main value -->
             <div class="mt-space-sm">
                 <div class="flex items-baseline gap-space-xs">
                     <span
@@ -88,7 +88,7 @@ defineProps({
                 </div>
             </div>
 
-            <!-- Footer -->
+            <!-- Detail -->
             <div
                 v-if="kpi.detail"
                 class="pt-space-sm font-body-sm text-body-sm"
