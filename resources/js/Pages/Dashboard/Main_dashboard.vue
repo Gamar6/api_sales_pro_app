@@ -1,27 +1,11 @@
 <script setup>
-import { computed, ref } from "vue";
+import { computed } from "vue";
 import AdminLayout from "@/Layouts/AdminLayout.vue";
 
 import DashboardHeader from "./components/DashboardHeader.vue";
 import DashboardKpiGrid from "./components/DashboardKpiGrid.vue";
-import DashboardModuleTabs from "./components/DashboardModuleTabs.vue";
+import DashboardQuickAccess from "./components/DashboardQuickAccess.vue";
 import DashboardOverview from "./components/DashboardOverview.vue";
-import DashboardModulePanels from "./components/DashboardModulePanels.vue";
-
-import {
-    clusters,
-    kpiConfig,
-    modules,
-    products,
-    stores as staticStores,
-    telemetryFeed,
-} from "./dashboardData";
-
-/*
-|--------------------------------------------------------------------------
-| Props dari Laravel / Inertia
-|--------------------------------------------------------------------------
-*/
 
 const props = defineProps({
     dashboardStats: {
@@ -29,37 +13,10 @@ const props = defineProps({
         required: true,
     },
 
-    /*
-    |--------------------------------------------------------------------------
-    | Dynamic area order performance
-    |--------------------------------------------------------------------------
-    |
-    | Dikirim dari DashboardController:
-    |
-    | [
-    |     {
-    |         name,
-    |         reps,
-    |         visited,
-    |         unique_orders,
-    |         order_events,
-    |         total,
-    |         percentage
-    |     }
-    | ]
-    |
-    */
-
     stores: {
         type: Array,
         default: () => [],
     },
-
-    /*
-    |--------------------------------------------------------------------------
-    | Dynamic sales order performance
-    |--------------------------------------------------------------------------
-    */
 
     salesOrderChart: {
         type: Array,
@@ -72,8 +29,6 @@ const props = defineProps({
     },
 });
 
-const activeModule = ref("dashboard");
-
 /*
 |--------------------------------------------------------------------------
 | KPI
@@ -81,22 +36,15 @@ const activeModule = ref("dashboard");
 */
 
 const kpis = computed(() => {
-    const stats = props.dashboardStats;
-
-    /*
-    |--------------------------------------------------------------------------
-    | Today's Check-ins
-    |--------------------------------------------------------------------------
-    */
+    const stats = props.dashboardStats ?? {};
 
     const totalCheckIns = Number(stats.totalCheckInsToday ?? 0);
-
     const activeSalesCount = Number(stats.activeSalesCount ?? 0);
-
     const targetPerSales = Number(stats.checkInTargetPerSales ?? 5);
 
     const targetToday = Number(
-        stats.checkInTargetToday ?? activeSalesCount * targetPerSales,
+        stats.checkInTargetToday ??
+            activeSalesCount * targetPerSales,
     );
 
     const progress =
@@ -106,36 +54,15 @@ const kpis = computed(() => {
 
     const remaining = Math.max(targetToday - totalCheckIns, 0);
 
-    /*
-    |--------------------------------------------------------------------------
-    | Check-in Status
-    |--------------------------------------------------------------------------
-    */
-
-    const checkInStatus =
-        targetToday === 0
-            ? "No active sales"
-            : totalCheckIns >= targetToday
-              ? "Shift target achieved"
-              : `${remaining} visits to target`;
-
-    /*
-    |--------------------------------------------------------------------------
-    | Average Visit Duration
-    |--------------------------------------------------------------------------
-    */
-
-    const averageVisitDuration = stats.averageVisitDuration ?? "0m 00s";
+    const averageVisitDuration =
+        stats.averageVisitDuration ?? "0m 00s";
 
     return [
         {
             key: "check-ins",
-
-            label: kpiConfig.checkIns.label,
-
-            value: totalCheckIns.toLocaleString(),
-
-            suffix: kpiConfig.checkIns.suffix,
+            label: "Today's Check-ins",
+            value: totalCheckIns.toLocaleString("id-ID"),
+            suffix: "Visits",
 
             progress: Number(progress.toFixed(1)),
 
@@ -149,7 +76,12 @@ const kpis = computed(() => {
                     ? `${activeSalesCount} active sales · ${targetPerSales} visits each`
                     : "No active sales available",
 
-            detail: checkInStatus,
+            detail:
+                targetToday === 0
+                    ? "No active sales"
+                    : totalCheckIns >= targetToday
+                      ? "Shift target achieved"
+                      : `${remaining} visits to target`,
 
             status:
                 targetToday === 0
@@ -161,17 +93,46 @@ const kpis = computed(() => {
 
         {
             key: "visit-duration",
-
-            label: kpiConfig.visitDuration.label,
-
+            label: "Avg. Visit Duration",
             value: averageVisitDuration,
+            suffix: "/ store",
 
-            suffix: kpiConfig.visitDuration.suffix,
+            context: "Based on completed visits today",
+
+            status: "neutral",
+        },
+
+        {
+            key: "active-sales",
+            label: "Active Sales",
+            value: activeSalesCount.toLocaleString("id-ID"),
+            suffix: "Sales",
+
+            context: "Sales with activity today",
+
+            status: activeSalesCount > 0 ? "success" : "neutral",
+        },
+
+        {
+            key: "ordered-stores",
+            label: "Ordered Stores",
+            value: Number(
+                stats.uniqueOrderStores ?? 0,
+            ).toLocaleString("id-ID"),
+            suffix: "Stores",
+
+            context:
+                Number(stats.orderEvents ?? 0) > 0
+                    ? `${Number(stats.orderEvents).toLocaleString("id-ID")} order activities`
+                    : "No order activity yet",
+
+            status:
+                Number(stats.uniqueOrderStores ?? 0) > 0
+                    ? "success"
+                    : "neutral",
         },
     ];
 });
-
-console.log("dashboardStats:", props.dashboardStats);
 </script>
 
 <template>
@@ -179,7 +140,9 @@ console.log("dashboardStats:", props.dashboardStats);
         <div class="min-h-screen bg-background text-on-surface">
             <main class="w-full">
                 <div class="flex w-full flex-col">
-                    <div class="flex flex-col gap-space-xl p-space-xl">
+                    <div
+                        class="flex flex-col gap-space-xl p-space-xl"
+                    >
                         <!-- ================================================= -->
                         <!-- HEADER -->
                         <!-- ================================================= -->
@@ -193,36 +156,21 @@ console.log("dashboardStats:", props.dashboardStats);
                         <DashboardKpiGrid :kpis="kpis" />
 
                         <!-- ================================================= -->
-                        <!-- MODULE TABS -->
+                        <!-- QUICK ACCESS -->
                         <!-- ================================================= -->
 
-                        <DashboardModuleTabs
-                            v-model:active-module="activeModule"
-                            :modules="modules"
-                        />
+                        <DashboardQuickAccess />
 
                         <!-- ================================================= -->
-                        <!-- DASHBOARD OVERVIEW -->
+                        <!-- OPERATIONAL OVERVIEW -->
                         <!-- ================================================= -->
 
                         <DashboardOverview
-                            v-if="activeModule === 'dashboard'"
-                            :dashboard-stats="props.dashboardStats"
                             :stores="props.stores"
-                            :telemetry="telemetryFeed"
                             :sales-order-chart="props.salesOrderChart"
-                            :outside-radius-alerts="outsideRadiusAlerts"
-                        />
-
-                        <!-- ================================================= -->
-                        <!-- OTHER MODULES -->
-                        <!-- ================================================= -->
-
-                        <DashboardModulePanels
-                            v-else
-                            :active-module="activeModule"
-                            :products="products"
-                            :stores="staticStores"
+                            :outside-radius-alerts="
+                                props.outsideRadiusAlerts
+                            "
                         />
                     </div>
                 </div>

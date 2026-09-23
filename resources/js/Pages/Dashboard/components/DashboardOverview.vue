@@ -1,19 +1,8 @@
 <script setup>
 import { computed, ref } from "vue";
 
-const showOutsideRadiusAlerts = ref(true);
-
-const goToAllExceptions = () => {
-    window.location.href = route("visit-exceptions.index");
-};
-
 const props = defineProps({
     stores: {
-        type: Array,
-        default: () => [],
-    },
-
-    telemetry: {
         type: Array,
         default: () => [],
     },
@@ -29,7 +18,7 @@ const props = defineProps({
     },
 });
 
-const alertVisible = ref(true);
+const showOutsideRadiusAlerts = ref(true);
 
 /*
 |--------------------------------------------------------------------------
@@ -43,7 +32,9 @@ const chartMaxValue = computed(() => {
     }
 
     const max = Math.max(
-        ...props.salesOrderChart.map((item) => Number(item.orders || 0)),
+        ...props.salesOrderChart.map((item) =>
+            Number(item.orders ?? 0),
+        ),
     );
 
     return Math.max(max, 1);
@@ -51,7 +42,16 @@ const chartMaxValue = computed(() => {
 
 const totalOrders = computed(() => {
     return props.salesOrderChart.reduce(
-        (total, item) => total + Number(item.orders || 0),
+        (total, item) =>
+            total + Number(item.orders ?? 0),
+        0,
+    );
+});
+
+const totalOrderEvents = computed(() => {
+    return props.salesOrderChart.reduce(
+        (total, item) =>
+            total + Number(item.order_events ?? 0),
         0,
     );
 });
@@ -61,11 +61,14 @@ const topSales = computed(() => {
         return null;
     }
 
-    return props.salesOrderChart.reduce((highest, current) => {
-        return Number(current.orders || 0) > Number(highest.orders || 0)
-            ? current
-            : highest;
-    });
+    return props.salesOrderChart.reduce(
+        (highest, current) => {
+            return Number(current.orders ?? 0) >
+                Number(highest.orders ?? 0)
+                ? current
+                : highest;
+        },
+    );
 });
 
 const averageOrders = computed(() => {
@@ -73,59 +76,90 @@ const averageOrders = computed(() => {
         return "0.0";
     }
 
-    return (totalOrders.value / props.salesOrderChart.length).toFixed(1);
+    return (
+        totalOrders.value /
+        props.salesOrderChart.length
+    ).toFixed(1);
 });
 
 const getBarHeight = (orders) => {
-    const value = Number(orders || 0);
+    const value = Number(orders ?? 0);
 
     if (!value || chartMaxValue.value === 0) {
         return 4;
     }
 
-    const percentage = (value / chartMaxValue.value) * 100;
+    const percentage =
+        (value / chartMaxValue.value) * 100;
 
     return Math.max(percentage, 6);
 };
 
 /*
 |--------------------------------------------------------------------------
-| Area dengan Order Tertinggi
+| Area Performance
 |--------------------------------------------------------------------------
 */
 
-const sortedStores = computed(() => {
+const sortedAreas = computed(() => {
     return [...props.stores]
         .map((store) => ({
             ...store,
-            reps: Number(store.reps || 0),
-            visited: Number(store.visited || 0),
-            total: Number(store.total || 0),
-            percentage: Number(store.percentage || 0),
+            reps: Number(store.reps ?? 0),
+            visited: Number(store.visited ?? 0),
+            unique_orders: Number(
+                store.unique_orders ?? 0,
+            ),
+            order_events: Number(
+                store.order_events ?? 0,
+            ),
+            total: Number(store.total ?? 0),
+            percentage: Number(
+                store.percentage ?? 0,
+            ),
         }))
         .sort((a, b) => {
             if (b.percentage !== a.percentage) {
                 return b.percentage - a.percentage;
             }
 
-            return b.visited - a.visited;
+            return (
+                b.unique_orders -
+                a.unique_orders
+            );
         });
 });
 
 const topAreas = computed(() => {
-    return sortedStores.value.slice(0, 5);
+    return sortedAreas.value.slice(0, 5);
 });
 
 const totalAreaStores = computed(() => {
     return props.stores.reduce(
-        (total, store) => total + Number(store.total || 0),
+        (total, store) =>
+            total + Number(store.total ?? 0),
         0,
     );
 });
 
 const totalAreaOrders = computed(() => {
     return props.stores.reduce(
-        (total, store) => total + Number(store.visited || 0),
+        (total, store) =>
+            total +
+            Number(
+                store.unique_orders ??
+                    store.visited ??
+                    0,
+            ),
+        0,
+    );
+});
+
+const totalAreaOrderEvents = computed(() => {
+    return props.stores.reduce(
+        (total, store) =>
+            total +
+            Number(store.order_events ?? 0),
         0,
     );
 });
@@ -135,45 +169,18 @@ const overallAreaPercentage = computed(() => {
         return 0;
     }
 
-    return Math.round((totalAreaOrders.value / totalAreaStores.value) * 100);
+    return Math.round(
+        (totalAreaOrders.value /
+            totalAreaStores.value) *
+            100,
+    );
 });
 
 /*
 |--------------------------------------------------------------------------
-| Telemetry
+| Outside Radius
 |--------------------------------------------------------------------------
 */
-
-const telemetryItems = computed(() => {
-    return props.telemetry.slice(0, 6);
-});
-
-const getTelemetryStatusClass = (status) => {
-    const normalized = String(status || "").toLowerCase();
-
-    if (
-        normalized.includes("success") ||
-        normalized.includes("active") ||
-        normalized.includes("online") ||
-        normalized.includes("completed")
-    ) {
-        return "bg-emerald-500";
-    }
-
-    if (normalized.includes("warning") || normalized.includes("pending")) {
-        return "bg-amber-500";
-    }
-
-    if (
-        normalized.includes("error") ||
-        normalized.includes("failed") ||
-        normalized.includes("offline")
-    ) {
-        return "bg-red-500";
-    }
-
-    return "bg-slate-400";
-};
 
 const outsideRadiusCount = computed(() => {
     return props.outsideRadiusAlerts.length;
@@ -194,30 +201,59 @@ const formatDistance = (distance) => {
 };
 
 const formatAlertDate = (date) => {
-    if (!date) return "-";
+    if (!date) {
+        return "-";
+    }
 
-    return new Date(date.replace(" ", "T")).toLocaleString("id-ID", {
+    const normalized = String(date).replace(
+        " ",
+        "T",
+    );
+
+    const parsed = new Date(normalized);
+
+    if (Number.isNaN(parsed.getTime())) {
+        return date;
+    }
+
+    return parsed.toLocaleString("id-ID", {
         dateStyle: "medium",
         timeStyle: "short",
     });
+};
+
+const goToExceptions = () => {
+    window.location.href = route(
+        "visit-exceptions.index",
+    );
+};
+
+const goToVisitReports = () => {
+    window.location.href = route(
+        "visit-reports",
+    );
 };
 </script>
 
 <template>
     <section class="flex flex-col gap-space-xl">
         <!-- ============================================================= -->
-        <!-- SALES ORDER + AREA PERFORMANCE -->
+        <!-- SALES + AREA -->
         <!-- ============================================================= -->
 
-        <div class="grid grid-cols-1 gap-space-lg lg:grid-cols-3">
+        <div
+            class="grid grid-cols-1 gap-space-lg xl:grid-cols-3"
+        >
             <!-- ========================================================= -->
-            <!-- SALES ORDER PERFORMANCE -->
+            <!-- SALES ORDER -->
             <!-- ========================================================= -->
 
             <article
-                class="rounded-lg bg-surface-container-lowest p-space-lg shadow-sm lg:col-span-2"
+                class="rounded-lg bg-surface-container-lowest p-space-lg shadow-sm xl:col-span-2"
             >
-                <div class="flex items-start justify-between gap-4">
+                <div
+                    class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
+                >
                     <div>
                         <p
                             class="text-xs font-semibold uppercase tracking-[0.12em] text-on-surface-variant"
@@ -225,21 +261,26 @@ const formatAlertDate = (date) => {
                             Performance
                         </p>
 
-                        <h2 class="mt-1 text-lg font-bold text-on-surface">
+                        <h2
+                            class="mt-1 text-lg font-bold text-on-surface"
+                        >
                             Sales Order Performance
                         </h2>
 
-                        <p class="mt-1 text-sm text-on-surface-variant">
-                            Distribusi order berdasarkan sales pada periode
-                            terpilih.
+                        <p
+                            class="mt-1 text-sm text-on-surface-variant"
+                        >
+                            Distribusi store yang melakukan order
+                            berdasarkan sales pada periode terpilih.
                         </p>
                     </div>
 
-                    <div
-                        class="rounded-full bg-surface-container px-3 py-1.5 text-xs font-semibold text-on-surface-variant"
+                    <span
+                        class="self-start rounded-full bg-surface-container px-3 py-1.5 text-xs font-semibold text-on-surface-variant"
                     >
-                        {{ props.salesOrderChart.length }} Sales
-                    </div>
+                        {{ salesOrderChart.length }}
+                        Sales
+                    </span>
                 </div>
 
                 <!-- Chart -->
@@ -253,13 +294,11 @@ const formatAlertDate = (date) => {
                         :key="sales.salesId"
                         class="flex min-w-[72px] flex-1 flex-col items-center justify-end gap-2"
                     >
-                        <!-- Order value -->
-
-                        <span class="text-xs font-semibold text-on-surface">
+                        <span
+                            class="text-xs font-semibold text-on-surface"
+                        >
                             {{ sales.orders }}
                         </span>
-
-                        <!-- Bar -->
 
                         <div
                             class="flex h-48 w-full items-end justify-center rounded-md bg-surface-container"
@@ -272,8 +311,6 @@ const formatAlertDate = (date) => {
                             ></div>
                         </div>
 
-                        <!-- Sales name -->
-
                         <span
                             class="max-w-[72px] truncate text-center text-xs text-on-surface-variant"
                             :title="sales.name"
@@ -283,20 +320,28 @@ const formatAlertDate = (date) => {
                     </div>
                 </div>
 
-                <!-- Empty state -->
-
                 <div
                     v-else
                     class="mt-8 flex h-64 items-center justify-center rounded-lg bg-surface-container"
                 >
                     <div class="text-center">
-                        <p class="text-sm font-semibold text-on-surface">
+                        <span
+                            class="material-symbols-outlined text-3xl text-on-surface-variant"
+                        >
+                            bar_chart
+                        </span>
+
+                        <p
+                            class="mt-2 text-sm font-semibold text-on-surface"
+                        >
                             Belum ada data order
                         </p>
 
-                        <p class="mt-1 text-xs text-on-surface-variant">
-                            Data akan muncul setelah terdapat report dengan
-                            aktivitas Order.
+                        <p
+                            class="mt-1 text-xs text-on-surface-variant"
+                        >
+                            Data akan muncul setelah terdapat report
+                            dengan aktivitas Order.
                         </p>
                     </div>
                 </div>
@@ -304,30 +349,46 @@ const formatAlertDate = (date) => {
                 <!-- Summary -->
 
                 <div
-                    class="mt-6 grid grid-cols-3 divide-x divide-outline-variant rounded-lg bg-surface-container"
+                    class="mt-6 grid grid-cols-1 divide-y divide-outline-variant rounded-lg bg-surface-container sm:grid-cols-3 sm:divide-x sm:divide-y-0"
                 >
                     <div class="px-4 py-3">
-                        <p class="text-xs text-on-surface-variant">
-                            Total Orders
+                        <p
+                            class="text-xs text-on-surface-variant"
+                        >
+                            Ordered Stores
                         </p>
 
-                        <p class="mt-1 text-lg font-bold text-on-surface">
-                            {{ totalOrders.toLocaleString() }}
-                        </p>
-                    </div>
-
-                    <div class="px-4 py-3">
-                        <p class="text-xs text-on-surface-variant">
-                            Average / Sales
-                        </p>
-
-                        <p class="mt-1 text-lg font-bold text-on-surface">
-                            {{ averageOrders }}
+                        <p
+                            class="mt-1 text-lg font-bold text-on-surface"
+                        >
+                            {{ totalOrders.toLocaleString("id-ID") }}
                         </p>
                     </div>
 
                     <div class="px-4 py-3">
-                        <p class="text-xs text-on-surface-variant">Top Sales</p>
+                        <p
+                            class="text-xs text-on-surface-variant"
+                        >
+                            Order Events
+                        </p>
+
+                        <p
+                            class="mt-1 text-lg font-bold text-on-surface"
+                        >
+                            {{
+                                totalOrderEvents.toLocaleString(
+                                    "id-ID",
+                                )
+                            }}
+                        </p>
+                    </div>
+
+                    <div class="px-4 py-3">
+                        <p
+                            class="text-xs text-on-surface-variant"
+                        >
+                            Top Sales
+                        </p>
 
                         <p
                             class="mt-1 truncate text-lg font-bold text-on-surface"
@@ -337,16 +398,43 @@ const formatAlertDate = (date) => {
                         </p>
                     </div>
                 </div>
+
+                <div
+                    class="mt-4 flex items-center justify-between gap-4"
+                >
+                    <p
+                        class="text-xs text-on-surface-variant"
+                    >
+                        Rata-rata
+                        {{ averageOrders }}
+                        ordered stores per sales.
+                    </p>
+
+                    <button
+                        type="button"
+                        class="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-primary hover:underline"
+                        @click="goToVisitReports"
+                    >
+                        Lihat reports
+                        <span
+                            class="material-symbols-outlined text-sm"
+                        >
+                            arrow_forward
+                        </span>
+                    </button>
+                </div>
             </article>
 
             <!-- ========================================================= -->
-            <!-- AREA DENGAN ORDER TERTINGGI -->
+            <!-- AREA -->
             <!-- ========================================================= -->
 
             <article
                 class="rounded-lg bg-surface-container-lowest p-space-lg shadow-sm"
             >
-                <div class="flex items-start justify-between gap-4">
+                <div
+                    class="flex items-start justify-between gap-4"
+                >
                     <div>
                         <p
                             class="text-xs font-semibold uppercase tracking-[0.12em] text-on-surface-variant"
@@ -354,83 +442,59 @@ const formatAlertDate = (date) => {
                             Area
                         </p>
 
-                        <h2 class="mt-1 text-lg font-bold text-on-surface">
-                            Area dengan Order Tertinggi
+                        <h2
+                            class="mt-1 text-lg font-bold text-on-surface"
+                        >
+                            Order Performance
                         </h2>
 
-                        <p class="mt-1 text-sm text-on-surface-variant">
-                            Berdasarkan toko yang sudah melakukan Order.
-                        </p>
-                    </div>
-                </div>
-
-                <!-- Overall -->
-
-                <div class="mt-6 rounded-lg bg-surface-container p-4">
-                    <div class="flex items-end justify-between gap-3">
-                        <div>
-                            <p class="text-xs text-on-surface-variant">
-                                Overall Coverage
-                            </p>
-
-                            <p class="mt-1 text-2xl font-bold text-on-surface">
-                                {{ overallAreaPercentage }}%
-                            </p>
-                        </div>
-
-                        <p class="text-xs text-on-surface-variant">
-                            {{ totalAreaOrders.toLocaleString() }}
-                            /
-                            {{ totalAreaStores.toLocaleString() }}
-                            toko
+                        <p
+                            class="mt-1 text-sm text-on-surface-variant"
+                        >
+                            Perbandingan store yang melakukan order
+                            terhadap populasi store per area.
                         </p>
                     </div>
 
                     <div
-                        class="mt-3 h-2 overflow-hidden rounded-full bg-surface-container-high"
+                        class="shrink-0 rounded-lg bg-primary-container px-3 py-2 text-center text-on-primary"
+                    >
+                        <p class="text-lg font-bold">
+                            {{ overallAreaPercentage }}%
+                        </p>
+
+                        <p class="text-[10px] uppercase">
+                            overall
+                        </p>
+                    </div>
+                </div>
+
+                <div
+                    v-if="topAreas.length"
+                    class="mt-6 space-y-5"
+                >
+                    <div
+                        v-for="area in topAreas"
+                        :key="area.name"
                     >
                         <div
-                            class="h-full rounded-full bg-primary transition-all duration-500"
-                            :style="{
-                                width: `${Math.min(
-                                    overallAreaPercentage,
-                                    100,
-                                )}%`,
-                            }"
-                        ></div>
-                    </div>
-                </div>
-
-                <!-- Area list -->
-
-                <div v-if="topAreas.length" class="mt-5 flex flex-col gap-4">
-                    <div
-                        v-for="(area, index) in topAreas"
-                        :key="area.name || index"
-                        class="group"
-                    >
-                        <div class="flex items-center justify-between gap-3">
+                            class="flex items-center justify-between gap-3"
+                        >
                             <div class="min-w-0">
-                                <div class="flex items-center gap-2">
-                                    <span
-                                        class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-container text-[10px] font-bold text-on-surface-variant"
-                                    >
-                                        {{ index + 1 }}
-                                    </span>
-
-                                    <p
-                                        class="truncate text-sm font-semibold text-on-surface"
-                                        :title="area.name"
-                                    >
-                                        {{ area.name || "Unknown Area" }}
-                                    </p>
-                                </div>
+                                <p
+                                    class="truncate text-sm font-semibold text-on-surface"
+                                    :title="area.name"
+                                >
+                                    {{ area.name }}
+                                </p>
 
                                 <p
-                                    class="mt-1 pl-8 text-xs text-on-surface-variant"
+                                    class="mt-0.5 text-xs text-on-surface-variant"
                                 >
-                                    {{ area.visited }} order /
-                                    {{ area.total }} toko
+                                    {{ area.reps }} sales
+                                    ·
+                                    {{ area.unique_orders }}
+                                    ordered stores
                                 </p>
                             </div>
 
@@ -442,243 +506,358 @@ const formatAlertDate = (date) => {
                         </div>
 
                         <div
-                            class="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-container"
+                            class="mt-2 h-2 overflow-hidden rounded-full bg-surface-container"
                         >
                             <div
-                                class="h-full rounded-full bg-primary transition-all duration-500"
+                                class="h-full rounded-full bg-primary transition-all"
                                 :style="{
-                                    width: `${Math.min(area.percentage, 100)}%`,
+                                    width: `${Math.min(
+                                        Math.max(
+                                            area.percentage,
+                                            0,
+                                        ),
+                                        100,
+                                    )}%`,
                                 }"
                             ></div>
                         </div>
+
+                        <div
+                            class="mt-1 flex justify-between text-[11px] text-on-surface-variant"
+                        >
+                            <span>
+                                {{
+                                    area.unique_orders.toLocaleString(
+                                        "id-ID",
+                                    )
+                                }}
+                                / {{ area.total.toLocaleString("id-ID") }}
+                                stores
+                            </span>
+
+                            <span>
+                                {{
+                                    area.order_events.toLocaleString(
+                                        "id-ID",
+                                    )
+                                }}
+                                events
+                            </span>
+                        </div>
                     </div>
                 </div>
-
-                <!-- Empty -->
 
                 <div
                     v-else
                     class="mt-6 rounded-lg bg-surface-container p-6 text-center"
                 >
-                    <p class="text-sm font-semibold text-on-surface">
+                    <span
+                        class="material-symbols-outlined text-3xl text-on-surface-variant"
+                    >
+                        location_city
+                    </span>
+
+                    <p
+                        class="mt-2 text-sm font-semibold text-on-surface"
+                    >
                         Belum ada data area
                     </p>
 
-                    <p class="mt-1 text-xs text-on-surface-variant">
-                        Data area akan muncul setelah snapshot retensi tersedia.
+                    <p
+                        class="mt-1 text-xs text-on-surface-variant"
+                    >
+                        Performance area akan muncul ketika data order
+                        tersedia.
                     </p>
+                </div>
+
+                <div
+                    class="mt-6 border-t border-outline-variant pt-4"
+                >
+                    <div
+                        class="grid grid-cols-2 gap-4"
+                    >
+                        <div>
+                            <p
+                                class="text-xs text-on-surface-variant"
+                            >
+                                Total Stores
+                            </p>
+
+                            <p
+                                class="mt-1 text-lg font-bold text-on-surface"
+                            >
+                                {{
+                                    totalAreaStores.toLocaleString(
+                                        "id-ID",
+                                    )
+                                }}
+                            </p>
+                        </div>
+
+                        <div>
+                            <p
+                                class="text-xs text-on-surface-variant"
+                            >
+                                Ordered Stores
+                            </p>
+
+                            <p
+                                class="mt-1 text-lg font-bold text-on-surface"
+                            >
+                                {{
+                                    totalAreaOrders.toLocaleString(
+                                        "id-ID",
+                                    )
+                                }}
+                            </p>
+                        </div>
+                    </div>
                 </div>
             </article>
         </div>
 
         <!-- ============================================================= -->
-        <!-- OUTSIDE RADIUS ALERT -->
+        <!-- OUTSIDE RADIUS -->
         <!-- ============================================================= -->
 
         <article
-            v-if="showOutsideRadiusAlerts && outsideRadiusCount > 0"
+            v-if="showOutsideRadiusAlerts"
             class="rounded-lg border border-amber-200 bg-amber-50 p-space-lg shadow-sm"
         >
-            <!-- Header -->
-            <div class="flex items-start justify-between gap-4">
-                <div class="flex min-w-0 gap-3">
+            <div
+                class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"
+            >
+                <div class="flex items-start gap-3">
                     <div
-                        class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-200 text-amber-800"
+                        class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700"
                     >
-                        <span class="material-symbols-outlined">
+                        <span
+                            class="material-symbols-outlined"
+                        >
                             location_off
                         </span>
                     </div>
 
-                    <div class="min-w-0">
-                        <div class="flex flex-wrap items-center gap-2">
-                            <h3 class="text-sm font-bold text-amber-900">
-                                Kunjungan di Luar Radius
-                            </h3>
+                    <div>
+                        <div
+                            class="flex flex-wrap items-center gap-2"
+                        >
+                            <p
+                                class="text-xs font-semibold uppercase tracking-[0.12em] text-amber-800"
+                            >
+                                Attention Required
+                            </p>
 
                             <span
                                 class="rounded-full bg-amber-200 px-2 py-0.5 text-[11px] font-bold text-amber-900"
                             >
-                                {{ outsideRadiusCount }} laporan
+                                {{ outsideRadiusCount }}
+                                alert
                             </span>
                         </div>
 
-                        <p class="mt-1 text-sm leading-6 text-amber-800">
-                            Terdapat laporan kunjungan dengan jarak GPS melebihi
-                            radius yang ditentukan.
+                        <h2
+                            class="mt-1 text-lg font-bold text-amber-950"
+                        >
+                            Outside Radius Visits
+                        </h2>
+
+                        <p
+                            class="mt-1 max-w-2xl text-sm text-amber-900/80"
+                        >
+                            Kunjungan berikut terdeteksi berada di luar
+                            radius toko dan membutuhkan peninjauan.
                         </p>
                     </div>
                 </div>
 
-                <!-- Tombol Tutup -->
-                <button
-                    type="button"
-                    class="shrink-0 rounded-md p-1 text-amber-700 transition hover:bg-amber-200 hover:text-amber-950"
-                    title="Tutup"
-                    @click="showOutsideRadiusAlerts = false"
+                <div
+                    class="flex items-center gap-2"
                 >
-                    <span class="material-symbols-outlined text-lg">
-                        close
-                    </span>
-                </button>
+                    <button
+                        type="button"
+                        class="rounded-md border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-900 transition hover:bg-amber-100"
+                        @click="goToExceptions"
+                    >
+                        Lihat Semua
+                    </button>
+
+                    <button
+                        type="button"
+                        class="flex h-9 w-9 items-center justify-center rounded-md text-amber-800 hover:bg-amber-100"
+                        title="Tutup"
+                        @click="showOutsideRadiusAlerts = false"
+                    >
+                        <span
+                            class="material-symbols-outlined text-lg"
+                        >
+                            close
+                        </span>
+                    </button>
+                </div>
             </div>
 
-            <!-- Alert List -->
-            <div class="mt-5 divide-y divide-amber-200">
+            <div
+                v-if="outsideRadiusAlerts.length"
+                class="mt-5 grid grid-cols-1 gap-3 lg:grid-cols-2"
+            >
                 <div
-                    v-for="alert in outsideRadiusAlerts"
-                    :key="alert.id"
-                    class="flex flex-col gap-2 py-4 first:pt-0 last:pb-0"
+                    v-for="(alert, index) in outsideRadiusAlerts"
+                    :key="alert.id ?? index"
+                    class="rounded-lg border border-amber-200 bg-white p-4"
                 >
-                    <div class="flex items-start justify-between gap-3">
+                    <div
+                        class="flex items-start justify-between gap-3"
+                    >
                         <div class="min-w-0">
                             <p
-                                class="truncate text-sm font-bold text-amber-950"
+                                class="truncate font-semibold text-slate-900"
                             >
-                                {{ alert.store.name }}
+                                {{
+                                    alert.sales_name ||
+                                    alert.sales?.name ||
+                                    "Sales"
+                                }}
                             </p>
 
-                            <p class="mt-0.5 text-xs text-amber-800">
-                                {{ alert.store.city }}
+                            <p
+                                class="mt-0.5 truncate text-sm text-slate-600"
+                            >
+                                {{
+                                    alert.store_name ||
+                                    alert.store?.name ||
+                                    "Store"
+                                }}
                             </p>
                         </div>
 
                         <span
-                            class="shrink-0 rounded-full bg-amber-200 px-2 py-1 text-[11px] font-bold text-amber-900"
+                            class="shrink-0 rounded-full bg-amber-100 px-2 py-1 text-[10px] font-bold uppercase text-amber-800"
                         >
                             Outside Radius
                         </span>
                     </div>
 
                     <div
-                        class="grid grid-cols-1 gap-1 text-xs text-amber-800 sm:grid-cols-2"
+                        class="mt-4 grid grid-cols-2 gap-3 text-xs"
                     >
-                        <span>
-                            Sales:
-                            <strong>{{ alert.sales.name }}</strong>
-                        </span>
+                        <div>
+                            <p class="text-slate-500">
+                                Distance
+                            </p>
 
-                        <span>
-                            Jarak:
-                            <strong>
-                                {{ formatDistance(alert.distance_from_store) }}
-                            </strong>
-                        </span>
-
-                        <span>
-                            Akurasi:
-                            <strong>
-                                {{ alert.sales_accuracy ?? "-" }} m
-                            </strong>
-                        </span>
-
-                        <span>
-                            Waktu:
-                            <strong>
+                            <p
+                                class="mt-1 font-semibold text-slate-900"
+                            >
                                 {{
-                                    formatAlertDate(alert.location_captured_at)
+                                    formatDistance(
+                                        alert.distance_from_store ??
+                                            alert.distance,
+                                    )
                                 }}
-                            </strong>
-                        </span>
-                    </div>
-                </div>
-            </div>
+                            </p>
+                        </div>
 
-            <!-- Footer -->
-            <div class="mt-5 border-t border-amber-200 pt-4">
-                <button
-                    type="button"
-                    class="flex w-full items-center justify-center gap-2 rounded-md border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-900 transition hover:bg-amber-100"
-                    @click="goToAllExceptions"
-                >
-                    Lihat Semua
-                    <span class="material-symbols-outlined text-base">
-                        arrow_forward
-                    </span>
-                </button>
-            </div>
-        </article>
+                        <div>
+                            <p class="text-slate-500">
+                                Time
+                            </p>
 
-        <!-- ============================================================= -->
-        <!-- TELEMETRY -->
-        <!-- ============================================================= -->
-
-        <article
-            class="rounded-lg bg-surface-container-lowest p-space-lg shadow-sm"
-        >
-            <div class="flex items-center justify-between gap-4">
-                <div>
-                    <p
-                        class="text-xs font-semibold uppercase tracking-[0.12em] text-on-surface-variant"
-                    >
-                        Live Activity
-                    </p>
-
-                    <h2 class="mt-1 text-lg font-bold text-on-surface">
-                        Telemetry Feed
-                    </h2>
-                </div>
-
-                <span
-                    class="rounded-full bg-surface-container px-3 py-1.5 text-xs font-semibold text-on-surface-variant"
-                >
-                    {{ telemetryItems.length }} Events
-                </span>
-            </div>
-
-            <div
-                v-if="telemetryItems.length"
-                class="mt-5 divide-y divide-outline-variant"
-            >
-                <div
-                    v-for="(item, index) in telemetryItems"
-                    :key="item.id ?? index"
-                    class="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
-                >
-                    <span
-                        class="h-2.5 w-2.5 shrink-0 rounded-full"
-                        :class="getTelemetryStatusClass(item.status)"
-                    ></span>
-
-                    <div class="min-w-0 flex-1">
-                        <p class="truncate text-sm font-medium text-on-surface">
-                            {{
-                                item.message ||
-                                item.title ||
-                                item.activity ||
-                                "Activity update"
-                            }}
-                        </p>
-
-                        <p
-                            v-if="item.description"
-                            class="mt-0.5 truncate text-xs text-on-surface-variant"
-                        >
-                            {{ item.description }}
-                        </p>
+                            <p
+                                class="mt-1 font-semibold text-slate-900"
+                            >
+                                {{
+                                    formatAlertDate(
+                                        alert.location_captured_at ??
+                                            alert.created_at,
+                                    )
+                                }}
+                            </p>
+                        </div>
                     </div>
 
-                    <span
-                        v-if="item.time || item.created_at"
-                        class="shrink-0 text-xs text-on-surface-variant"
+                    <div
+                        v-if="alert.sales_accuracy"
+                        class="mt-3 text-xs text-slate-600"
                     >
-                        {{ item.time || item.created_at }}
-                    </span>
+                        GPS accuracy:
+                        <strong>
+                            {{ alert.sales_accuracy }}
+                        </strong>
+                    </div>
                 </div>
             </div>
 
             <div
                 v-else
-                class="mt-5 rounded-lg bg-surface-container p-6 text-center"
+                class="mt-5 rounded-lg border border-amber-200 bg-white p-6 text-center"
             >
-                <p class="text-sm font-semibold text-on-surface">
-                    Belum ada aktivitas
+                <span
+                    class="material-symbols-outlined text-3xl text-amber-600"
+                >
+                    check_circle
+                </span>
+
+                <p
+                    class="mt-2 text-sm font-semibold text-slate-900"
+                >
+                    Tidak ada exception
                 </p>
 
-                <p class="mt-1 text-xs text-on-surface-variant">
-                    Aktivitas terbaru akan tampil di sini.
+                <p
+                    class="mt-1 text-xs text-slate-600"
+                >
+                    Semua kunjungan dalam periode ini berada dalam
+                    kondisi normal.
                 </p>
             </div>
+        </article>
+
+        <!-- ============================================================= -->
+        <!-- NO ALERT -->
+        <!-- ============================================================= -->
+
+        <article
+            v-else
+            class="flex items-center justify-between gap-4 rounded-lg bg-surface-container-lowest p-space-lg shadow-sm"
+        >
+            <div class="flex items-center gap-3">
+                <div
+                    class="flex h-10 w-10 items-center justify-center rounded-full bg-surface-container text-on-surface-variant"
+                >
+                    <span
+                        class="material-symbols-outlined"
+                    >
+                        visibility_off
+                    </span>
+                </div>
+
+                <div>
+                    <p
+                        class="text-sm font-semibold text-on-surface"
+                    >
+                        Outside radius alerts disembunyikan
+                    </p>
+
+                    <p
+                        class="mt-1 text-xs text-on-surface-variant"
+                    >
+                        {{
+                            outsideRadiusCount
+                        }}
+                        alert tersedia untuk ditinjau.
+                    </p>
+                </div>
+            </div>
+
+            <button
+                type="button"
+                class="text-xs font-semibold text-primary hover:underline"
+                @click="showOutsideRadiusAlerts = true"
+            >
+                Tampilkan
+            </button>
         </article>
     </section>
 </template>
