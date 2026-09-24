@@ -16,24 +16,17 @@ use Inertia\Response;
 
 class UserManagementController extends Controller
 {
-    /**
-     * Display user management page.
-     */
+    //Display user management page.
     public function index(Request $request): Response
     {
         $query = User::query();
 
-        /*
-         * Admin hanya melihat sales.
-         * Superadmin dapat melihat semua user.
-         */
+        //Admin & Superadmin access control
         if ($request->user()->role === 'admin') {
             $query->where('role', 'sales');
         }
 
-        /*
-         * Search.
-         */
+        //Search.
         if ($request->filled('search')) {
             $search = $request->string('search')->trim();
 
@@ -45,16 +38,12 @@ class UserManagementController extends Controller
             });
         }
 
-        /*
-         * Filter role.
-         */
+        //Filter role.
         if ($request->filled('role')) {
             $query->where('role', $request->role);
         }
 
-        /*
-         * Filter status.
-         */
+        //Filter status.
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
@@ -91,19 +80,12 @@ class UserManagementController extends Controller
         ]);
     }
 
-    /**
-     * Store new user.
-     */
+    //Store new user.
     public function store(StoreUserRequest $request): RedirectResponse
     {
         $validated = $request->validated();
 
-        /*
-         * Admin hanya boleh membuat sales.
-         *
-         * Ini sengaja dicek lagi di backend meskipun
-         * sudah dibatasi oleh FormRequest.
-         */
+        //Admin Access
         if (
             $request->user()->role === 'admin'
             && $validated['role'] !== 'sales'
@@ -127,9 +109,7 @@ class UserManagementController extends Controller
         );
     }
 
-    /**
-     * Update user.
-     */
+    //Update user.
     public function update(
         UpdateUserRequest $request,
         User $user
@@ -137,9 +117,7 @@ class UserManagementController extends Controller
         $validated = $request->validated();
         $currentUser = $request->user();
 
-        /*
-         * Admin hanya boleh mengedit sales.
-         */
+        //Admin hanya boleh mengedit sales.
         if (
             $currentUser->role === 'admin'
             && $user->role !== 'sales'
@@ -147,9 +125,6 @@ class UserManagementController extends Controller
             abort(403, 'Admin tidak dapat mengelola user ini.');
         }
 
-        /*
-         * Admin tidak boleh menaikkan privilege.
-         */
         if (
             $currentUser->role === 'admin'
             && $validated['role'] !== 'sales'
@@ -157,10 +132,6 @@ class UserManagementController extends Controller
             abort(403, 'Admin hanya dapat menggunakan role sales.');
         }
 
-        /*
-         * Jangan izinkan perubahan role superadmin
-         * menjadi role lain jika dia adalah superadmin terakhir.
-         */
         if (
             $user->role === 'superadmin'
             && $validated['role'] !== 'superadmin'
@@ -185,9 +156,7 @@ class UserManagementController extends Controller
         );
     }
 
-    /**
-     * Change user status.
-     */
+    //Change user status.
     public function updateStatus(
         Request $request,
         User $user
@@ -202,30 +171,18 @@ class UserManagementController extends Controller
         $currentUser = $request->user();
         $newStatus = $request->status;
 
-        /*
-         * Admin hanya boleh mengelola sales.
-         */
+        //Admin hanya boleh mengelola sales.
         if (
             $currentUser->role === 'admin'
             && $user->role !== 'sales'
         ) {
             abort(403, 'Admin tidak dapat mengelola user ini.');
         }
-
-        /*
-         * Jangan sampai user mengubah dirinya sendiri
-         * melalui endpoint status.
-         */
         if ($currentUser->id === $user->id) {
             return back()->withErrors([
                 'status' => 'Anda tidak dapat mengubah status akun sendiri.',
             ]);
         }
-
-        /*
-         * Jangan sampai superadmin terakhir
-         * dibuat suspended/inactive.
-         */
         if (
             $user->role === 'superadmin'
             && in_array($newStatus, ['suspended', 'inactive'], true)
@@ -240,11 +197,6 @@ class UserManagementController extends Controller
             $user->update([
                 'status' => $newStatus,
             ]);
-
-            /*
-             * Jika user tidak aktif, cabut seluruh
-             * token Sanctum miliknya.
-             */
             if (in_array($newStatus, ['suspended', 'inactive'], true)) {
                 $user->tokens()->delete();
             }
@@ -258,10 +210,6 @@ class UserManagementController extends Controller
 
         return back()->with('success', $message);
     }
-
-    /**
-     * Reset password user.
-     */
     public function resetPassword(
         ResetUserPasswordRequest $request,
         User $user
@@ -280,32 +228,19 @@ class UserManagementController extends Controller
                 $request->validated('password')
             ),
         ]);
-
-        /*
-         * Reset password juga mencabut seluruh
-         * token Flutter yang lama.
-         */
-        $user->tokens()->delete();
+   $user->tokens()->delete();
 
         return back()->with(
             'success',
             'Password user berhasil direset.'
         );
     }
-
-    /**
-     * Check whether this is the last superadmin.
-     */
     private function isLastSuperadmin(User $user): bool
     {
         return User::where('role', 'superadmin')
             ->whereKeyNot($user->id)
             ->doesntExist();
     }
-
-    /**
-     * Check whether this is the last active superadmin.
-     */
     private function isLastActiveSuperadmin(User $user): bool
     {
         return User::where('role', 'superadmin')

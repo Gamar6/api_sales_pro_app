@@ -5,9 +5,7 @@ class OdooSchemaService
 {
     public function __construct(protected OdooClient $client) {}
 
-    /**
-     * Cari daftar Nama Model di Odoo
-     */
+    //Cari daftar Nama Model di Odoo
     public function getAllModels(string $search = ''): array
     {
         $domain = [];
@@ -23,9 +21,6 @@ class OdooSchemaService
         return $this->client->executeKw('ir.model', 'search_read', [$domain], $kwargs);
     }
 
-    /**
-     * Intip semua kolom (fields) di dalam suatu Model
-     */
     public function getModelFields(string $modelName): array
     {
         $kwargs = [

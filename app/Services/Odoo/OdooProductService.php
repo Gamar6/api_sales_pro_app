@@ -5,9 +5,6 @@ class OdooProductService
 {
     public function __construct(protected OdooClient $client) {}
 
-    /**
-     * Ambil sampel data stok produk
-     */
     public function getStockProducts(int $limit = 10): array
     {
         $domain = [
@@ -22,9 +19,6 @@ class OdooProductService
         return $this->client->executeKw('stock.quant', 'search_read', [$domain], $kwargs);
     }
 
-    /**
-     * Ambil Produk Siap Jual (Saleable) & Stoknya
-     */
     public function getProductsWithStock(int $limit = 20, string $search = ''): array
     {
         $domain = [
@@ -47,9 +41,6 @@ class OdooProductService
         return $this->client->executeKw('product.product', 'search_read', [$domain], $kwargs);
     }
 
-    /**
-     * Ambil daftar Kategori Produk
-     */
     public function getProductCategories(): array
     {
         $kwargs = [
@@ -60,9 +51,6 @@ class OdooProductService
         return $this->client->executeKw('product.category', 'search_read', [[]], $kwargs);
     }
 
-    /**
-     * Ambil produk yang pernah terjual DAN statusnya masih aktif
-     */
     public function getActiveSoldProducts(int $limit = 20): array
     {
         $domain = [
@@ -78,14 +66,8 @@ class OdooProductService
         return $this->client->executeKw('sale.order.line', 'search_read', [$domain], $kwargs);
     }
 
-    /**
-     * Ambil produk terjual dan stoknya khusus Perusahaan/CV tertentu
-     */
     public function getSoldProductsWithStock(int $companyId = 1, int $limit = 500): array
     {
-        // ============================================================
-        // 1. Cari semua produk yang pernah terjual di Company 1
-        // ============================================================
         $soldLines = $this->client->executeKw(
             'sale.order.line',
             'search_read',
@@ -101,9 +83,6 @@ class OdooProductService
             ]
         );
 
-        // ============================================================
-        // 2. Buat master list produk
-        // ============================================================
         $productMap = [];
 
         foreach ($soldLines as $line) {
@@ -114,7 +93,6 @@ class OdooProductService
             $id = $line['product_id'][0];
             $name = $line['product_id'][1] ?? 'Produk Tanpa Nama';
 
-            // Hanya PRODUK JADI
             if (!str_contains($name, '[PRODUK JADI]')) {
                 continue;
             }
@@ -125,22 +103,17 @@ class OdooProductService
                     'title' => $name,
                     'subtitle' => 'Lokasi: CV. Fiva Food Meat & Supply',
 
-                    // Stok
                     'raw_qty' => 0,
                     'unit' => 'pcs',
 
-                    // Harga
                     'price' => 0,
 
-                    // Data berat
                     'weight' => 0,
                     'weight_unit' => 'kg',
 
-                    // Packaging
                     'package_unit' => 'karton',
                     'packs_per_package' => 1,
 
-                    // Gambar
                     'imageUrl' => null,
                 ];
             }
@@ -152,9 +125,6 @@ class OdooProductService
 
         $productIds = array_keys($productMap);
 
-        // ============================================================
-        // 3. Ambil stok produk
-        // ============================================================
         $domainQuant = [
             ['product_id', 'in', $productIds],
             ['location_id.usage', '=', 'internal'],
@@ -174,9 +144,6 @@ class OdooProductService
             ]
         );
 
-        // ============================================================
-        // 4. Akumulasi stok
-        // ============================================================
         foreach ($quants as $quant) {
             if (!isset($quant['product_id'][0])) {
                 continue;
@@ -193,9 +160,6 @@ class OdooProductService
             $productMap[$productId]['raw_qty'] += $qty;
         }
 
-        // ============================================================
-        // 5. Ambil informasi produk dari Odoo
-        // ============================================================
         $products = $this->client->executeKw(
             'product.product',
             'search_read',
@@ -214,9 +178,6 @@ class OdooProductService
             ]
         );
 
-        // ============================================================
-        // 6. Masukkan harga + berat + satuan ke master list
-        // ============================================================
         foreach ($products as $product) {
             $productId = $product['id'] ?? null;
 
@@ -224,19 +185,15 @@ class OdooProductService
                 continue;
             }
 
-            // Harga
             $productMap[$productId]['price'] =
                 (float) ($product['list_price'] ?? 0);
 
-            // Berat dari Odoo
             $weight = (float) ($product['weight'] ?? 0);
 
             $productMap[$productId]['weight'] = $weight;
 
-            // Odoo weight menggunakan kg
             $productMap[$productId]['weight_unit'] = 'kg';
 
-            // UoM dari Odoo
             if (isset($product['uom_id'][1])) {
                 $productMap[$productId]['unit'] =
                     strtolower($product['uom_id'][1]) === 'units'
@@ -245,15 +202,10 @@ class OdooProductService
             }
         }
 
-        // ============================================================
-        // 7. Kembalikan hasil
-        // ============================================================
         return array_values($productMap);
     }
 
-    /**
-     * Ambil daftar lokasi gudang bertipe internal
-     */
+    //Ambil daftar lokasi gudang bertipe internal
     public function getLocations(): array
     {
         $domain = [
@@ -268,9 +220,7 @@ class OdooProductService
         return $this->client->executeKw('stock.location', 'search_read', [$domain], $kwargs);
     }
 
-    /**
-     * Ambil produk terjual dan stoknya dari lokasi CV tertentu
-     */
+    //Ambil produk terjual dan stoknya dari lokasi CV tertentu
     public function getActiveSoldProductsFromCV(int $cvLocationId, int $limit = 10): array
     {
         $productIds = $this->getSoldProductIds($limit * 3);
@@ -292,9 +242,7 @@ class OdooProductService
         return $this->client->executeKw('stock.quant', 'search_read', [$domainQuant], $kwargsQuant);
     }
 
-    /**
-     * Helper internal untuk mengambil ID Produk unik yang pernah terjual
-     */
+    //Helper internal untuk mengambil ID Produk unik yang pernah terjual
     protected function getSoldProductIds(int $limit): array
     {
         $domainLine = [

@@ -118,10 +118,6 @@ const storeAddress = computed(() => {
     <aside
         class="w-full xl:w-[480px] xl:sticky xl:top-6 xl:h-[calc(100vh-3rem)] shrink-0 bg-surface-container-lowest rounded-xl shadow-xl flex flex-col overflow-hidden"
     >
-        <!-- ============================================================ -->
-        <!-- HEADER -->
-        <!-- ============================================================ -->
-
         <div
             class="shrink-0 p-space-base bg-primary text-on-primary flex items-start justify-between gap-space-base"
         >
@@ -175,9 +171,7 @@ const storeAddress = computed(() => {
             </button>
         </div>
 
-        <!-- ============================================================ -->
         <!-- STORE INFORMATION -->
-        <!-- ============================================================ -->
 
         <div
             class="shrink-0 p-space-sm px-space-base bg-surface-container-highest border-b border-outline-variant/20"
@@ -206,9 +200,7 @@ const storeAddress = computed(() => {
             </div>
         </div>
 
-        <!-- ============================================================ -->
         <!-- SCROLLABLE BODY -->
-        <!-- ============================================================ -->
 
         <div
             class="flex-1 min-h-0 p-space-base flex flex-col gap-space-lg overflow-y-auto overscroll-contain"
@@ -221,9 +213,7 @@ const storeAddress = computed(() => {
 
             <VisitTelemetry :visit="visit" :duration="duration" />
 
-            <!-- ======================================================== -->
             <!-- REPORT -->
-            <!-- ======================================================== -->
 
             <div v-if="visit.report" class="flex flex-col gap-space-base">
                 <!-- PIC -->
@@ -310,9 +300,7 @@ const storeAddress = computed(() => {
                 </div>
             </div>
 
-            <!-- ======================================================== -->
             <!-- NO REPORT -->
-            <!-- ======================================================== -->
 
             <div
                 v-else
@@ -326,9 +314,7 @@ const storeAddress = computed(() => {
             </div>
         </div>
 
-        <!-- ============================================================ -->
         <!-- STICKY FOOTER -->
-        <!-- ============================================================ -->
 
         <div
             class="shrink-0 p-space-base bg-surface-container-low border-t border-outline-variant/20 shadow-[0_-4px_12px_rgba(0,0,0,0.04)] flex items-center justify-between gap-space-base"

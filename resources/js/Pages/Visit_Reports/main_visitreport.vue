@@ -35,34 +35,15 @@ const props = defineProps({
     },
 });
 
-/*
-|--------------------------------------------------------------------------
-| Drawer State
-|--------------------------------------------------------------------------
-*/
-
 const selectedVisit = ref(null);
 
-/*
-|--------------------------------------------------------------------------
-| Local Filters
-|--------------------------------------------------------------------------
-*/
-
 const localFilters = ref({
-    date: props.filters?.date !== undefined && props.filters?.date !== ""
-        ? props.filters.date
-        : getTodayDate(),
+    date: props.filters?.date ?? "",
     sales_id: props.filters?.sales_id ?? "",
     status: props.filters?.status ?? "",
     search: props.filters?.search ?? "",
+    quick_filter: props.filters?.quick_filter ?? "today",
 });
-
-/*
-|--------------------------------------------------------------------------
-| Sync Filters From Backend
-|--------------------------------------------------------------------------
-*/
 
 watch(
     () => props.filters,
@@ -72,6 +53,7 @@ watch(
             sales_id: newFilters?.sales_id ?? "",
             status: newFilters?.status ?? "",
             search: newFilters?.search ?? "",
+            quick_filter: newFilters?.quick_filter ?? "today",
         };
     },
     {
@@ -79,21 +61,9 @@ watch(
     },
 );
 
-/*
-|--------------------------------------------------------------------------
-| Visit Data
-|--------------------------------------------------------------------------
-*/
-
 const visitData = computed(() => {
     return props.visits?.data ?? [];
 });
-
-/*
-|--------------------------------------------------------------------------
-| Apply Filters
-|--------------------------------------------------------------------------
-*/
 
 function applyFilters(filters = localFilters.value, page = 1) {
     const query = {
@@ -116,18 +86,16 @@ function applyFilters(filters = localFilters.value, page = 1) {
         query.search = filters.search;
     }
 
+    if (filters.quick_filter) {
+        query.quick_filter = filters.quick_filter;
+    }
+
     router.get(route("visit-reports"), query, {
         preserveState: true,
         preserveScroll: true,
         replace: true,
     });
 }
-
-/*
-|--------------------------------------------------------------------------
-| Filter Changed
-|--------------------------------------------------------------------------
-*/
 
 function handleFilterChange(newFilters) {
     localFilters.value = {
@@ -139,12 +107,6 @@ function handleFilterChange(newFilters) {
 
     applyFilters(localFilters.value, 1);
 }
-
-/*
-|--------------------------------------------------------------------------
-| Reset Filters
-|--------------------------------------------------------------------------
-*/
 
 function resetFilters() {
     localFilters.value = {
@@ -159,29 +121,6 @@ function resetFilters() {
     applyFilters(localFilters.value, 1);
 }
 
-/*
-|--------------------------------------------------------------------------
-| Show All Time
-|--------------------------------------------------------------------------
-*/
-
-function showAllTime() {
-    localFilters.value = {
-        ...localFilters.value,
-        date: "",
-    };
-
-    selectedVisit.value = null;
-
-    applyFilters(localFilters.value, 1);
-}
-
-/*
-|--------------------------------------------------------------------------
-| Pagination
-|--------------------------------------------------------------------------
-*/
-
 function changePage(page) {
     const lastPage = props.visits?.last_page ?? 1;
 
@@ -194,12 +133,6 @@ function changePage(page) {
     applyFilters(localFilters.value, page);
 }
 
-/*
-|--------------------------------------------------------------------------
-| Inspection Drawer
-|--------------------------------------------------------------------------
-*/
-
 function selectVisit(visit) {
     selectedVisit.value = visit;
 }
@@ -208,14 +141,30 @@ function closeDrawer() {
     selectedVisit.value = null;
 }
 
-/*
-|--------------------------------------------------------------------------
-| Header Actions
-|--------------------------------------------------------------------------
-*/
-
 function exportReports() {
-    console.log("Export Visit Reports");
+    const params = new URLSearchParams();
+
+    if (localFilters.value.date) {
+        params.set("date", localFilters.value.date);
+    }
+
+    if (localFilters.value.sales_id) {
+        params.set("sales_id", localFilters.value.sales_id);
+    }
+
+    if (localFilters.value.status) {
+        params.set("status", localFilters.value.status);
+    }
+
+    if (localFilters.value.search) {
+        params.set("search", localFilters.value.search);
+    }
+
+    if (localFilters.value.quick_filter) {
+        params.set("quick_filter", localFilters.value.quick_filter);
+    }
+
+    window.location.href = `${route("visit-reports.export")}?${params.toString()}`;
 }
 
 function generateAuditReport() {
@@ -229,9 +178,7 @@ function generateAuditReport() {
             <div
                 class="w-full max-w-[1720px] mx-auto p-space-xl flex flex-col gap-space-lg"
             >
-                <!-- ==================================================== -->
                 <!-- HEADER -->
-                <!-- ==================================================== -->
 
                 <VisitReportHeader
                     :statistics="statistics"
@@ -239,9 +186,7 @@ function generateAuditReport() {
                     @audit="generateAuditReport"
                 />
 
-                <!-- ==================================================== -->
                 <!-- FILTERS -->
-                <!-- ==================================================== -->
 
                 <VisitReportFilters
                     :filters="localFilters"
@@ -249,12 +194,9 @@ function generateAuditReport() {
                     :statistics="statistics"
                     @update:filters="handleFilterChange"
                     @reset="resetFilters"
-                    @all-time="showAllTime"
                 />
 
-                <!-- ==================================================== -->
                 <!-- TABLE + INSPECTION DRAWER -->
-                <!-- ==================================================== -->
 
                 <div
                     class="relative flex flex-col xl:flex-row items-start gap-space-lg w-full"

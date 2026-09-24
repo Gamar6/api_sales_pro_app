@@ -23,9 +23,6 @@ class OdooService
         $this->password = config('services.odoo.password', env('ODOO_PASSWORD'));
     }
 
-    /**
-     * Autentikasi ke Odoo & dapatkan User ID (UID)
-     */
     public function authenticate(): bool
     {
         $client = new Client($this->url . '/xmlrpc/2/common');
@@ -47,9 +44,6 @@ class OdooService
         return is_int($this->uid) && $this->uid > 0;
     }
 
-    /**
-     * Cek status koneksi ke Odoo
-     */
     public function checkConnection(): bool
     {
         try {
@@ -59,9 +53,6 @@ class OdooService
         }
     }
 
-    /**
-     * Ambil sampel data stok produk
-     */
     public function getStockProducts(int $limit = 10): array
     {
         if (!$this->uid && !$this->authenticate()) {
@@ -107,9 +98,6 @@ class OdooService
         return json_decode(json_encode($response->value()->scalarval()), true) ?? [];
     }
 
-    /**
-     * Cari daftar Nama Model di Odoo
-     */
     public function getAllModels(string $search = ''): array
     {
         if (!$this->uid && !$this->authenticate()) return [];
@@ -151,9 +139,7 @@ class OdooService
         return $encoder->decode($response->value());
     }
 
-    /**
-     * Intip semua kolom (fields) yang ada di dalam sebuah Model Odoo
-     */
+
     public function getModelFields(string $modelName): array
     {
         if (!$this->uid && !$this->authenticate()) return [];
@@ -182,9 +168,7 @@ class OdooService
         return $encoder->decode($response->value());
     }
 
-/**
-     * Ambil Produk Siap Jual (Saleable) & Stoknya
-     */
+
     public function getProductsWithStock(int $limit = 20, string $search = ''): array
     {
         if (!$this->uid && !$this->authenticate()) {
@@ -193,7 +177,6 @@ class OdooService
 
         $client = new Client($this->url . '/xmlrpc/2/object');
 
-        // Filter: Hanya produk aktif DAN termasuk kategori Saleable (ID: 2) beserta anak kategorinya
         $domain = [
             new Value([
                 new Value('sale_ok', 'string'),
@@ -203,11 +186,10 @@ class OdooService
             new Value([
                 new Value('categ_id', 'string'),
                 new Value('child_of', 'string'),
-                new Value(2, 'int') // ID 2 = All / Saleable
+                new Value(2, 'int') 
             ], 'array'),
         ];
 
-        // Filter pencarian opsional berdasarkan nama
         if (!empty($search)) {
             $domain[] = new Value([
                 new Value('name', 'string'),
@@ -248,9 +230,7 @@ class OdooService
         $encoder = new \PhpXmlRpc\Encoder();
         return $encoder->decode($response->value());
     }
-    /**
-     * Intip daftar Kategori Produk yang ada di Odoo
-     */
+
     public function getProductCategories(): array
     {
         if (!$this->uid && !$this->authenticate()) return [];
@@ -283,9 +263,7 @@ class OdooService
         return $encoder->decode($response->value());
     }
 
-    /**
-     * Ambil sampel data Toko/Customer dari model res.partner
-     */
+
     public function getStores(): array
     {
         if (!$this->uid && !$this->authenticate()) return [];
@@ -293,7 +271,6 @@ class OdooService
         $client = new Client($this->url . '/xmlrpc/2/object');
         $encoder = new \PhpXmlRpc\Encoder();
 
-        // 1. Domain Kosong (Ambil semua data)
         $domain = [
             '|', '|', '|', '|',
             ['city', 'ilike', 'Jakarta'],
@@ -306,7 +283,6 @@ class OdooService
             ['sale_order_ids.date_order', '<=', now()->format('Y-m-d 23:59:59')],
         ];
 
-        // 2. Tentukan field yang ingin diambil & limit
         $kwargs = [
             'fields' => [
                 'id',
@@ -342,9 +318,7 @@ class OdooService
     }
 
 
-    /**
-     * Hitung total jumlah toko/partner yang ada di Odoo
-     */
+
     public function getStoresCount(): int
     {
         if (!$this->uid && !$this->authenticate()) return 0;
@@ -383,9 +357,7 @@ class OdooService
         return $encoder->decode($response->value()) ?? 0;
     }
 
-    /**
-     * Ambil produk yang pernah terjual DAN statusnya masih aktif dijual
-     */
+
     public function getActiveSoldProducts(int $limit = 20): array
     {
         if (!$this->uid && !$this->authenticate()) {
@@ -431,9 +403,7 @@ class OdooService
         return $encoder->decode($response->value()) ?? [];
     }
 
-    /**
-     * Ambil produk terjual dan stoknya khusus untuk perusahaan CV (Company ID: 1)
-     */
+
     public function getActiveSoldProductsForCV(int $companyId = 1, int $limit = 10): array
     {
         if (!$this->uid && !$this->authenticate()) {
@@ -508,9 +478,7 @@ class OdooService
         return $encoder->decode($resQuant->value()) ?? [];
     }
 
-    /**
-     * Ambil daftar lokasi gudang untuk mencari ID lokasi CV
-     */
+
     public function getLocations(): array
     {
         if (!$this->uid && !$this->authenticate()) return [];
@@ -543,9 +511,6 @@ class OdooService
         return $encoder->decode($response->value()) ?? [];
     }
 
-    /**
-     * Ambil produk terjual dan stok khusus dari lokasi CV
-     */
     public function getActiveSoldProductsFromCV(int $cvLocationId, int $limit = 10): array
     {
         if (!$this->uid && !$this->authenticate()) {

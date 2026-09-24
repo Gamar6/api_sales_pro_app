@@ -35,21 +35,11 @@ const navigation = [
         href: "/visit-reports",
         icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01",
     },
-    // {
-    //     name: "Store Directory",
-    //     href: "/stores",
-    //     icon: "M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5m0 0h4m-4 0V11m0 0h4m-4 0H9m4 0V5",
-    // },
     {
         name: "Katalog Produk",
         href: "/product-catalog",
         icon: "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4",
     },
-    // {
-    //     name: "Status Odoo Sync",
-    //     href: "/odoo-sync",
-    //     icon: "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15",
-    // },
     {
         name: "User Management",
         href: "/admin/users",
@@ -64,7 +54,6 @@ const isCurrentRoute = (path) => page.url.startsWith(path);
 
 <template>
     <div class="min-h-screen bg-[#F8FAFC] font-sans flex text-slate-800">
-        <!-- SIDEBAR (35% Brand Secondary: #1C467F) -->
         <aside
             :class="[
                 'bg-[#1C467F] text-white flex flex-col transition-all duration-300 z-30 shadow-xl',
@@ -76,7 +65,6 @@ const isCurrentRoute = (path) => page.url.startsWith(path);
                 class="h-16 flex items-center justify-between px-4 border-b border-white/10 bg-[#163866]"
             >
                 <div class="flex items-center gap-3 overflow-hidden">
-                    <!-- Icon Logo Sales Pro App -->
                     <div
                         class="w-9 h-9 rounded-lg bg-[#F48110] flex items-center justify-center font-black text-white text-lg shrink-0 shadow-md"
                     >
@@ -143,7 +131,6 @@ const isCurrentRoute = (path) => page.url.startsWith(path);
                         item.name
                     }}</span>
 
-                    <!-- Indicator Strip jika Aktif -->
                     <span
                         v-if="isCurrentRoute(item.href) && !isSidebarOpen"
                         class="absolute right-0 top-2 bottom-2 w-1 bg-[#F48110] rounded-l"

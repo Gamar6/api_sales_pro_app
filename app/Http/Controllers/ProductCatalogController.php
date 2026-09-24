@@ -43,13 +43,6 @@ class ProductCatalogController extends Controller
 
             $title = $product['title'] ?? 'Produk Tanpa Nama';
 
-            /*
-             * getSoldProductsWithStock() saat ini belum mengambil:
-             * brand, barcode, reserved, reorder level, bin,
-             * packaging dari Odoo secara dinamis.
-             *
-             * Jadi kita gunakan fallback yang aman.
-             */
             return [
                 'id' => (int) ($product['id'] ?? 0),
 
@@ -107,9 +100,7 @@ class ProductCatalogController extends Controller
             ];
         }, $rawProducts);
 
-        /*
-         * Hilangkan produk duplikat berdasarkan ID.
-         */
+        //Hilangkan produk duplikat berdasarkan ID.
         $products = collect($products)
             ->unique('id')
             ->values()

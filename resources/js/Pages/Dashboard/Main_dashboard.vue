@@ -33,11 +33,8 @@ const props = defineProps({
     },
 });
 
-/*
-|--------------------------------------------------------------------------
-| Export Modal
-|--------------------------------------------------------------------------
-*/
+
+// Export Modal
 
 const showExportModal = ref(false);
 
@@ -60,11 +57,7 @@ const exportDashboard = ({ date_from, date_to }) => {
     showExportModal.value = false;
 };
 
-/*
-|--------------------------------------------------------------------------
-| Dashboard KPIs
-|--------------------------------------------------------------------------
-*/
+// Dashboard KPIs
 
 const kpis = computed(() => {
     const stats = props.dashboardStats;
@@ -78,11 +71,7 @@ const kpis = computed(() => {
             ? ((orderedStores / totalStores) * 100).toFixed(1)
             : "0.0";
 
-    /*
-    |--------------------------------------------------------------------------
-    | Check-ins
-    |--------------------------------------------------------------------------
-    */
+//    Check-ins
 
     const totalCheckIns = Number(stats.totalCheckInsToday ?? 0);
     const activeSalesCount = Number(stats.activeSalesCount ?? 0);
@@ -106,11 +95,7 @@ const kpis = computed(() => {
               ? "Shift target achieved"
               : `${remainingCheckIns} visits to target`;
 
-    /*
-    |--------------------------------------------------------------------------
-    | Visit Duration
-    |--------------------------------------------------------------------------
-    */
+    // Visit Duration
 
     const averageVisitDuration = stats.averageVisitDuration ?? "0m 00s";
 
@@ -120,11 +105,7 @@ const kpis = computed(() => {
         ? "Within expected range"
         : "No completed visits today";
 
-    /*
-    |--------------------------------------------------------------------------
-    | KPI Cards
-    |--------------------------------------------------------------------------
-    */  
+    // KPI Cards 
 
     return [
         {

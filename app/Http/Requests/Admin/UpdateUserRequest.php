@@ -24,12 +24,10 @@ class UpdateUserRequest extends FormRequest
             return false;
         }
 
-        // Superadmin boleh mengelola semua user.
         if ($currentUser->role === 'superadmin') {
             return true;
         }
 
-        // Admin hanya boleh mengelola sales.
         return $targetUser->role === 'sales';
     }
 

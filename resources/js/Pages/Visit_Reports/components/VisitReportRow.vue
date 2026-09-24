@@ -106,11 +106,7 @@ const formatDate = (date) => {
 const report = computed(() => props.visit.report ?? null);
 
 const isOutsideRadius = computed(() => {
-    return (
-        report.value?.is_outside_radius === true ||
-        report.value?.is_outside_radius === 1 ||
-        report.value?.is_outside_radius === "1"
-    );
+    return props.visit?.report?.is_outside_radius === true;
 });
 
 const formatDistance = (distance) => {
@@ -286,25 +282,25 @@ const formatDistance = (distance) => {
                 v-if="hasReport"
                 class="flex items-center gap-1.5 text-emerald-700"
             >
-                <span class="material-symbols-outlined text-[18px]">
+                <span class="material-symbols-outlined text-[16px]">
                     description
                 </span>
 
-                <span class="font-code-metric text-[11px] font-semibold">
-                    Submitted
-                </span>
+                <span>Submitted</span>
 
-                <span class="material-symbols-outlined text-[15px]">
-                    location_off
-                </span>
-
-                <span class="text-[10px] font-semibold"> Outside Radius </span>
-
-                <div
-                    v-if="hasReport && isOutsideRadius"
-                    class="mt-0.5 text-[10px] text-secondary"
+                <span
+                    v-if="isOutsideRadius"
+                    class="ml-1 inline-flex items-center gap-1 text-red-600"
                 >
-                    {{ formatDistance(report.distance_from_store) }}
+                    <span class="material-symbols-outlined text-[15px]">
+                        location_off
+                    </span>
+
+                    Outside Radius
+                </span>
+
+                <div v-if="isOutsideRadius" class="text-xs text-red-600">
+                    {{ formatDistance(visit.report.distance_from_store) }}
                 </div>
             </div>
 

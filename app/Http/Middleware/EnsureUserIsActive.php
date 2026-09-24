@@ -8,9 +8,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 class EnsureUserIsActive
 {
-    /**
-     * Pastikan user yang sedang login masih aktif.
-     */
+    //Pastikan user yang sedang login masih aktif.
     public function handle(
         Request $request,
         Closure $next
@@ -22,9 +20,7 @@ class EnsureUserIsActive
         }
 
         if ($user->status !== 'active') {
-            /*
-             * Web session.
-             */
+            //Web session.
             if ($request->hasSession()) {
                 auth()->logout();
 
@@ -32,9 +28,7 @@ class EnsureUserIsActive
                 $request->session()->regenerateToken();
             }
 
-            /*
-             * API / Flutter.
-             */
+            // API / Flutter.
             if ($request->expectsJson()) {
                 return response()->json([
                     'status' => 'error',

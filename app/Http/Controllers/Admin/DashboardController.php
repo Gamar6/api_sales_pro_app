@@ -21,9 +21,7 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class DashboardController extends Controller
 {
-    /**
-     * Dashboard utama.
-     */
+    //Dashboard utama.
     public function index(
         Request $request,
         OdooService $odooService
@@ -267,9 +265,7 @@ class DashboardController extends Controller
         );
     }
 
-    /**
-     * Load the latest retention snapshot.
-     */
+    //Load the latest retention snapshot.
     private function loadRetentionSnapshot(
         OdooService $odooService
     ): Collection {
@@ -548,9 +544,7 @@ class DashboardController extends Controller
             ->values();
     }
 
-    /**
-     * Get visit reports containing Order activity.
-     */
+    //Get visit reports containing Order activity.
     private function getOrderVisitReports(
         ?Carbon $dateFrom,
         ?Carbon $dateTo
@@ -603,9 +597,7 @@ class DashboardController extends Controller
             ->values();
     }
 
-    /**
-     * Load Odoo partners by IDs.
-     */
+    //Load Odoo partners by IDs.
     private function loadOdooPartners(
         OdooService $odooService,
         array $partnerIds
@@ -668,9 +660,7 @@ class DashboardController extends Controller
         );
     }
 
-    /**
-     * Build sales order performance.
-     */
+    //Build sales order performance.
     private function buildSalesOrderChart(
         Collection $orderVisitReports
     ): Collection {
@@ -776,9 +766,7 @@ class DashboardController extends Controller
             ->values();
     }
 
-    /**
-     * Build area order performance.
-     */
+    //Build area order performance.
     private function buildAreaOrderPerformance(
         Collection $stores,
         Collection $orderVisitReports,
@@ -942,9 +930,7 @@ class DashboardController extends Controller
             ->values();
     }
 
-    /**
-     * Export dashboard summary to Excel.
-     */
+    //Export dashboard summary to Excel.
     public function exportSummary(
         Request $request,
         OdooService $odooService

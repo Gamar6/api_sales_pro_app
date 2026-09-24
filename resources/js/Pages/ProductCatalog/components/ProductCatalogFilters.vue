@@ -92,11 +92,6 @@ const exportProducts = () => {
           )
         : [];
 
-    /*
-     * Export sederhana berdasarkan data card yang sedang
-     * dirender. Untuk full server-side export nanti bisa
-     * dibuat endpoint tersendiri.
-     */
     const data = Array.from(rows).map((row) => {
         return [
             row.dataset.sku || "",

@@ -8,9 +8,7 @@ use Illuminate\Support\Facades\Hash;
 
 class AuthController extends Controller
 {
-    /**
-     * Login user melalui API.
-     */
+    //Login user melalui API.
     public function login(Request $request)
     {
         $request->validate([
@@ -51,9 +49,6 @@ class AuthController extends Controller
         ]);
     }
 
-    /**
-     * Mengubah password user yang sedang login.
-     */
     public function changePassword(Request $request)
     {
         $user = $request->user();

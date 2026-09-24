@@ -18,10 +18,7 @@ const props = defineProps({
     },
 });
 
-const emit = defineEmits([
-    "update:filters",
-    "reset",
-]);
+const emit = defineEmits(["update:filters", "reset"]);
 
 const showDatePicker = ref(false);
 const showSalesPicker = ref(false);
@@ -37,24 +34,16 @@ const localFilters = computed({
     },
 });
 
-/*
-|--------------------------------------------------------------------------
-| DATE
-|--------------------------------------------------------------------------
-*/
+// DATE
 
-const todayDate = new Date()
-    .toISOString()
-    .split("T")[0];
+const todayDate = new Date().toISOString().split("T")[0];
 
 const formattedDate = computed(() => {
     if (!localFilters.value.date) {
         return "All Time";
     }
 
-    const date = new Date(
-        `${localFilters.value.date}T00:00:00`,
-    );
+    const date = new Date(`${localFilters.value.date}T00:00:00`);
 
     return new Intl.DateTimeFormat("en-US", {
         day: "2-digit",
@@ -82,7 +71,7 @@ function setToday() {
 function setAllTime() {
     updateFilters({
         date: null,
-        quick_filter: "all_time",
+        quick_filter: "all",
     });
 
     showDatePicker.value = false;
@@ -101,12 +90,7 @@ function setDate(date) {
     showDatePicker.value = false;
 }
 
-/*
-|--------------------------------------------------------------------------
-| SALES
-|--------------------------------------------------------------------------
-*/
-
+// SALES
 const selectedSalesLabel = computed(() => {
     if (!localFilters.value.sales_id) {
         return `All Reps (${props.sales.length})`;
@@ -114,8 +98,7 @@ const selectedSalesLabel = computed(() => {
 
     const selectedSales = props.sales.find(
         (salesUser) =>
-            String(salesUser.id) ===
-            String(localFilters.value.sales_id),
+            String(salesUser.id) === String(localFilters.value.sales_id),
     );
 
     return selectedSales?.name ?? "Selected Rep";
@@ -129,11 +112,7 @@ function setSales(salesId) {
     showSalesPicker.value = false;
 }
 
-/*
-|--------------------------------------------------------------------------
-| STATUS
-|--------------------------------------------------------------------------
-*/
+// STATUS
 
 const selectedStatusLabel = computed(() => {
     const status = localFilters.value.status;
@@ -160,44 +139,35 @@ function setStatus(status) {
     showStatusPicker.value = false;
 }
 
-/*
-|--------------------------------------------------------------------------
-| QUICK FILTER
-|--------------------------------------------------------------------------
-*/
+// QUICK FILTER
 
 function setQuickFilter(type) {
     if (type === "all") {
         updateFilters({
+            date: null,
             status: null,
             quick_filter: "all",
         });
-
         return;
     }
 
     if (type === "flagged") {
         updateFilters({
-            status: "CANCELLED",
+            status: null,
             quick_filter: "flagged",
         });
-
         return;
     }
 
-    if (type === "pending") {
+    if (type === "active") {
         updateFilters({
-            status: "PENDING",
-            quick_filter: "pending",
+            status: null,
+            quick_filter: "active",
         });
     }
 }
 
-/*
-|--------------------------------------------------------------------------
-| RESET
-|--------------------------------------------------------------------------
-*/
+// RESET
 
 function resetFilters() {
     showDatePicker.value = false;
@@ -213,9 +183,7 @@ function resetFilters() {
         class="bg-surface-container-lowest rounded-xl p-space-base shadow-sm flex flex-wrap items-center gap-space-base justify-between"
     >
         <!-- LEFT FILTERS -->
-        <div
-            class="flex flex-wrap items-center gap-space-sm flex-1"
-        >
+        <div class="flex flex-wrap items-center gap-space-sm flex-1">
             <!-- DATE -->
             <div class="relative">
                 <button
@@ -223,309 +191,266 @@ function resetFilters() {
                     class="min-w-[210px] flex items-center justify-between bg-surface-container-low px-space-sm py-1.5 rounded hover:bg-surface-container transition-colors"
                     @click="showDatePicker = !showDatePicker"
                 >
-                    <div
-                        class="flex items-center gap-space-xs"
-                    >
+                    <div class="flex items-center gap-space-xs">
                         <span
                             class="material-symbols-outlined text-secondary text-[18px]"
                         >
                             calendar_today
                         </span>
 
+                        <span
+                            class="font-body-md text-body-md font-semibold text-primary"
+                        >
+                            {{ formattedDate }}
+                        </span>
+                    </div>
+
                     <span
-                        class="font-body-md text-body-md font-semibold text-primary"
+                        class="material-symbols-outlined text-secondary text-[16px]"
                     >
-                        {{ formattedDate }}
+                        {{ showDatePicker ? "expand_less" : "arrow_drop_down" }}
                     </span>
-                </div>
-
-                <span
-                    class="material-symbols-outlined text-secondary text-[16px]"
-                >
-                    {{
-                        showDatePicker
-                            ? "expand_less"
-                            : "arrow_drop_down"
-                    }}
-                </span>
-            </button>
-
-            <!-- DATE DROPDOWN -->
-            <div
-                v-if="showDatePicker"
-                class="absolute z-50 mt-2 left-0 w-[260px] bg-surface-container-lowest rounded-xl shadow-xl border border-outline-variant overflow-hidden"
-            >
-                <!-- TODAY -->
-                <button
-                    type="button"
-                    class="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-surface-container-low transition-colors"
-                    :class="
-                        localFilters.quick_filter === 'today'
-                            ? 'bg-surface-container-low text-primary font-bold'
-                            : 'text-on-surface'
-                    "
-                    @click="setToday"
-                >
-                    <span
-                        class="material-symbols-outlined text-[18px]"
-                    >
-                        today
-                    </span>
-
-                    <span>Today</span>
                 </button>
 
-                <!-- ALL TIME -->
-                <button
-                    type="button"
-                    class="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-surface-container-low transition-colors"
-                    :class="
-                        localFilters.quick_filter === 'all_time'
-                            ? 'bg-surface-container-low text-primary font-bold'
-                            : 'text-on-surface'
-                    "
-                    @click="setAllTime"
-                >
-                    <span
-                        class="material-symbols-outlined text-[18px]"
-                    >
-                        calendar_month
-                    </span>
-
-                    <span>All Time</span>
-                </button>
-
+                <!-- DATE DROPDOWN -->
                 <div
-                    class="h-px bg-outline-variant"
-                />
-
-                <!-- CUSTOM DATE -->
-                <div class="p-3">
-                    <span
-                        class="block mb-2 text-[11px] uppercase tracking-wider text-secondary font-semibold"
+                    v-if="showDatePicker"
+                    class="absolute z-50 mt-2 left-0 w-[260px] bg-surface-container-lowest rounded-xl shadow-xl border border-outline-variant overflow-hidden"
+                >
+                    <!-- TODAY -->
+                    <button
+                        type="button"
+                        class="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-surface-container-low transition-colors"
+                        :class="
+                            localFilters.quick_filter === 'today'
+                                ? 'bg-surface-container-low text-primary font-bold'
+                                : 'text-on-surface'
+                        "
+                        @click="setToday"
                     >
-                        Select Date
-                    </span>
+                        <span class="material-symbols-outlined text-[18px]">
+                            today
+                        </span>
 
-                    <input
-                        type="date"
-                        :value="localFilters.date || ''"
-                        class="w-full bg-surface-container-low rounded px-3 py-2 text-primary outline-none"
-                        @change="setDate($event.target.value)"
-                    />
+                        <span>Today</span>
+                    </button>
+
+                    <!-- ALL TIME -->
+                    <button
+                        type="button"
+                        class="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-surface-container-low transition-colors"
+                        :class="
+                            localFilters.quick_filter === 'all'
+                                ? 'bg-surface-container-low text-primary font-bold'
+                                : 'text-on-surface'
+                        "
+                        @click="setAllTime"
+                    >
+                        <span class="material-symbols-outlined text-[18px]">
+                            calendar_month
+                        </span>
+
+                        <span>All Time</span>
+                    </button>
+
+                    <div class="h-px bg-outline-variant" />
+
+                    <!-- CUSTOM DATE -->
+                    <div class="p-3">
+                        <span
+                            class="block mb-2 text-[11px] uppercase tracking-wider text-secondary font-semibold"
+                        >
+                            Select Date
+                        </span>
+
+                        <input
+                            type="date"
+                            :value="localFilters.date || ''"
+                            class="w-full bg-surface-container-low rounded px-3 py-2 text-primary outline-none"
+                            @change="setDate($event.target.value)"
+                        />
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <!-- SALES -->
-        <div class="relative">
-            <button
-                type="button"
-                class="min-w-[200px] flex items-center justify-between bg-surface-container-low px-space-sm py-1.5 rounded hover:bg-surface-container transition-colors"
-                @click="showSalesPicker = !showSalesPicker"
-            >
-                <div
-                    class="flex items-center gap-space-xs"
-                >
-                    <span
-                        class="material-symbols-outlined text-secondary text-[18px]"
-                    >
-                        group
-                    </span>
-
-                    <span
-                        class="font-body-md text-body-md text-on-surface"
-                    >
-                        {{ selectedSalesLabel }}
-                    </span>
-                </div>
-
-                <span
-                    class="material-symbols-outlined"
-                >
-                    {{
-                        showSalesPicker
-                            ? "expand_less"
-                            : "expand_more"
-                    }}
-                </span>
-            </button>
-
-            <div
-                v-if="showSalesPicker"
-                class="absolute z-50 mt-2 left-0 min-w-[240px] max-h-[280px] overflow-y-auto bg-surface-container-lowest rounded-xl shadow-xl border border-outline-variant py-2"
-            >
+            <!-- SALES -->
+            <div class="relative">
                 <button
                     type="button"
-                    class="w-full text-left px-4 py-2 hover:bg-surface-container-low"
-                    @click="setSales(null)"
+                    class="min-w-[200px] flex items-center justify-between bg-surface-container-low px-space-sm py-1.5 rounded hover:bg-surface-container transition-colors"
+                    @click="showSalesPicker = !showSalesPicker"
                 >
-                    All Reps
-                </button>
+                    <div class="flex items-center gap-space-xs">
+                        <span
+                            class="material-symbols-outlined text-secondary text-[18px]"
+                        >
+                            group
+                        </span>
 
-                <button
-                    v-for="salesUser in sales"
-                    :key="salesUser.id"
-                    type="button"
-                    class="w-full text-left px-4 py-2 hover:bg-surface-container-low"
-                    @click="setSales(salesUser.id)"
-                >
-                    {{ salesUser.name }}
-                </button>
-            </div>
-        </div>
+                        <span class="font-body-md text-body-md text-on-surface">
+                            {{ selectedSalesLabel }}
+                        </span>
+                    </div>
 
-        <!-- STATUS -->
-        <div class="relative">
-            <button
-                type="button"
-                class="min-w-[190px] flex items-center justify-between bg-surface-container-low px-space-sm py-1.5 rounded hover:bg-surface-container transition-colors"
-                @click="showStatusPicker = !showStatusPicker"
-            >
-                <div
-                    class="flex items-center gap-space-xs"
-                >
                     <span class="material-symbols-outlined">
-                        category
+                        {{ showSalesPicker ? "expand_less" : "expand_more" }}
                     </span>
+                </button>
 
-                    <span class="font-body-md text-body-md">
-                        {{ selectedStatusLabel }}
-                    </span>
+                <div
+                    v-if="showSalesPicker"
+                    class="absolute z-50 mt-2 left-0 min-w-[240px] max-h-[280px] overflow-y-auto bg-surface-container-lowest rounded-xl shadow-xl border border-outline-variant py-2"
+                >
+                    <button
+                        type="button"
+                        class="w-full text-left px-4 py-2 hover:bg-surface-container-low"
+                        @click="setSales(null)"
+                    >
+                        All Reps
+                    </button>
+
+                    <button
+                        v-for="salesUser in sales"
+                        :key="salesUser.id"
+                        type="button"
+                        class="w-full text-left px-4 py-2 hover:bg-surface-container-low"
+                        @click="setSales(salesUser.id)"
+                    >
+                        {{ salesUser.name }}
+                    </button>
                 </div>
+            </div>
 
-                <span
-                    class="material-symbols-outlined"
-                >
-                    {{
-                        showStatusPicker
-                            ? "expand_less"
-                            : "expand_more"
-                    }}
-                </span>
-            </button>
-
-            <div
-                v-if="showStatusPicker"
-                class="absolute z-50 mt-2 left-0 min-w-[220px] bg-surface-container-lowest rounded-xl shadow-xl border border-outline-variant py-2"
-            >
+            <!-- STATUS -->
+            <div class="relative">
                 <button
                     type="button"
-                    class="w-full text-left px-4 py-2 hover:bg-surface-container-low"
-                    @click="setStatus(null)"
+                    class="min-w-[190px] flex items-center justify-between bg-surface-container-low px-space-sm py-1.5 rounded hover:bg-surface-container transition-colors"
+                    @click="showStatusPicker = !showStatusPicker"
                 >
-                    All Categories
+                    <div class="flex items-center gap-space-xs">
+                        <span class="material-symbols-outlined">
+                            category
+                        </span>
+
+                        <span class="font-body-md text-body-md">
+                            {{ selectedStatusLabel }}
+                        </span>
+                    </div>
+
+                    <span class="material-symbols-outlined">
+                        {{ showStatusPicker ? "expand_less" : "expand_more" }}
+                    </span>
+                </button>
+
+                <div
+                    v-if="showStatusPicker"
+                    class="absolute z-50 mt-2 left-0 min-w-[220px] bg-surface-container-lowest rounded-xl shadow-xl border border-outline-variant py-2"
+                >
+                    <button
+                        type="button"
+                        class="w-full text-left px-4 py-2 hover:bg-surface-container-low"
+                        @click="setStatus(null)"
+                    >
+                        All Categories
+                    </button>
+
+                    <button
+                        type="button"
+                        class="w-full text-left px-4 py-2 hover:bg-surface-container-low"
+                        @click="setStatus('COMPLETED')"
+                    >
+                        Completed
+                    </button>
+
+                    <button
+                        type="button"
+                        class="w-full text-left px-4 py-2 hover:bg-surface-container-low"
+                        @click="setStatus('IN_VISIT')"
+                    >
+                        Active Visit
+                    </button>
+
+                    <button
+                        type="button"
+                        class="w-full text-left px-4 py-2 hover:bg-surface-container-low"
+                        @click="setStatus('CANCELLED')"
+                    >
+                        Cancelled
+                    </button>
+                </div>
+            </div>
+
+            <!-- QUICK FILTER -->
+            <div class="flex items-center gap-1.5 ml-2">
+                <button
+                    type="button"
+                    class="px-2.5 py-1 rounded-full font-label-caps text-label-caps uppercase"
+                    :class="
+                        !localFilters.quick_filter ||
+                        localFilters.quick_filter === 'all'
+                            ? 'bg-primary text-on-primary'
+                            : 'bg-surface-container text-secondary'
+                    "
+                    @click="setQuickFilter('all')"
+                >
+                    All ({{ statistics.total_visits ?? 0 }})
                 </button>
 
                 <button
                     type="button"
-                    class="w-full text-left px-4 py-2 hover:bg-surface-container-low"
-                    @click="setStatus('COMPLETED')"
+                    class="px-2.5 py-1 rounded-full font-label-caps text-label-caps uppercase"
+                    :class="
+                        localFilters.quick_filter === 'flagged'
+                            ? 'bg-primary text-on-primary'
+                            : 'bg-surface-container text-secondary'
+                    "
+                    @click="setQuickFilter('flagged')"
                 >
-                    Completed
+                    Flagged
                 </button>
 
                 <button
                     type="button"
-                    class="w-full text-left px-4 py-2 hover:bg-surface-container-low"
-                    @click="setStatus('IN_VISIT')"
+                    class="px-2.5 py-1 rounded-full bg-surface-container text-secondary font-label-caps text-label-caps uppercase"
+                    :class="
+                        localFilters.quick_filter === 'pending'
+                            ? 'bg-primary text-on-primary'
+                            : ''
+                    "
+                    @click="setQuickFilter('pending')"
                 >
-                    Active Visit
-                </button>
-
-                <button
-                    type="button"
-                    class="w-full text-left px-4 py-2 hover:bg-surface-container-low"
-                    @click="setStatus('CANCELLED')"
-                >
-                    Cancelled
+                    Pending Sync
                 </button>
             </div>
         </div>
 
-        <!-- QUICK FILTER -->
-        <div
-            class="flex items-center gap-1.5 ml-2"
-        >
+        <!-- RIGHT ACTION -->
+        <div class="flex items-center gap-space-sm">
+            <!-- RESET -->
             <button
                 type="button"
-                class="px-2.5 py-1 rounded-full font-label-caps text-label-caps uppercase"
-                :class="
-                    !localFilters.quick_filter ||
-                    localFilters.quick_filter === 'all'
-                        ? 'bg-primary text-on-primary'
-                        : 'bg-surface-container text-secondary'
-                "
-                @click="setQuickFilter('all')"
+                class="p-2 rounded bg-surface-container-low text-secondary hover:text-primary"
+                @click="resetFilters"
             >
-                All ({{ statistics.total_visits ?? 0 }})
+                <span class="material-symbols-outlined"> restart_alt </span>
             </button>
 
-            <button
-                type="button"
-                class="px-2.5 py-1 rounded-full font-label-caps text-label-caps uppercase"
-                :class="
-                    localFilters.quick_filter === 'flagged'
-                        ? 'bg-primary text-on-primary'
-                        : 'bg-surface-container text-secondary'
-                "
-                @click="setQuickFilter('flagged')"
+            <!-- VIEW MODE -->
+            <div
+                class="flex items-center gap-1 bg-surface-container-low p-1 rounded"
             >
-                Flagged
-            </button>
+                <button
+                    type="button"
+                    class="p-1 bg-surface-container-lowest rounded shadow-sm text-primary"
+                >
+                    <span class="material-symbols-outlined"> table_rows </span>
+                </button>
 
-            <button
-                type="button"
-                class="px-2.5 py-1 rounded-full bg-surface-container text-secondary font-label-caps text-label-caps uppercase"
-                :class="
-                    localFilters.quick_filter === 'pending'
-                        ? 'bg-primary text-on-primary'
-                        : ''
-                "
-                @click="setQuickFilter('pending')"
-            >
-                Pending Sync
-            </button>
+                <button type="button" class="p-1 text-secondary">
+                    <span class="material-symbols-outlined"> map </span>
+                </button>
+            </div>
         </div>
     </div>
-
-    <!-- RIGHT ACTION -->
-    <div class="flex items-center gap-space-sm">
-
-        <!-- RESET -->
-        <button
-            type="button"
-            class="p-2 rounded bg-surface-container-low text-secondary hover:text-primary"
-            @click="resetFilters"
-        >
-            <span class="material-symbols-outlined">
-                restart_alt
-            </span>
-        </button>
-
-        <!-- VIEW MODE -->
-        <div
-            class="flex items-center gap-1 bg-surface-container-low p-1 rounded"
-        >
-            <button
-                type="button"
-                class="p-1 bg-surface-container-lowest rounded shadow-sm text-primary"
-            >
-                <span class="material-symbols-outlined">
-                    table_rows
-                </span>
-            </button>
-
-            <button
-                type="button"
-                class="p-1 text-secondary"
-            >
-                <span class="material-symbols-outlined">
-                    map
-                </span>
-            </button>
-        </div>
-    </div>
-</div>
-
 </template>

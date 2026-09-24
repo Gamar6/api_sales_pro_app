@@ -15,9 +15,7 @@ use Illuminate\Validation\Rule;
 
 class ProfileController extends Controller
 {
-    /**
-     * Display the user's profile form.
-     */
+    //Display the user's profile form.
     public function updatePhoto(Request $request){
         $request->validate([
             'photo' => 'required|image|mimes:jpeg,png,jpg|max:2048',
@@ -25,12 +23,10 @@ class ProfileController extends Controller
 
         $user = $request->user();
 
-        // 1. Hapus foto lama di Cloudinary jika sudah pernah upload
         if ($user->profile_photo_public_id) {
             Cloudinary::destroy($user->profile_photo_public_id);
         }
 
-        // 2. Upload foto baru dengan penyesuaian ukuran & crop ke wajah
         $uploadedFile = Cloudinary::upload($request->file('photo')->getRealPath(), [
             'folder' => 'app_sales/profiles',
             'transformation' => [
@@ -41,7 +37,6 @@ class ProfileController extends Controller
             ]
         ]);
 
-        // 3. Simpan URL dan Public ID ke database
         $user->update([
             'profile_photo_url'       => $uploadedFile->getSecurePath(),
             'profile_photo_public_id' => $uploadedFile->getPublicId(),
@@ -65,9 +60,7 @@ class ProfileController extends Controller
         ]);
     }
 
-    /**
-     * Update the user's profile information.
-     */
+    //Update the user's profile information.
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
         $request->user()->fill($request->validated());
@@ -81,9 +74,7 @@ class ProfileController extends Controller
         return Redirect::route('profile.edit');
     }
 
-    /**
-     * Delete the user's account.
-     */
+    //Delete the user's account.
     public function destroy(Request $request): RedirectResponse
     {
         $request->validate([

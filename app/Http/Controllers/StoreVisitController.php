@@ -130,9 +130,7 @@ class StoreVisitController extends Controller
     {
         $salesId = $request->user()->id;
 
-        // =========================
-        // VALIDASI GPS
-        // =========================
+        //GPS Validation
         if (
             !$request->filled('sales_latitude') ||
             !$request->filled('sales_longitude') ||
@@ -170,9 +168,7 @@ class StoreVisitController extends Controller
                 $salesLongitude,
                 $salesAccuracy
             ) {
-                // =========================
-                // AMBIL VISIT
-                // =========================
+                //AMBIL VISIT
                 $visit = StoreVisit::where('id', $visitId)
                     ->where('sales_id', $salesId)
                     ->lockForUpdate()
@@ -196,9 +192,7 @@ class StoreVisitController extends Controller
                     ], 422);
                 }
 
-                // =========================
                 // AMBIL KOORDINAT TOKO DARI ODOO
-                // =========================
                 $partners = $this->odooService->execute_kw(
                     'res.partner',
                     'search_read',
@@ -237,9 +231,7 @@ class StoreVisitController extends Controller
                 $storeLatitude = (float) $storeLatitude;
                 $storeLongitude = (float) $storeLongitude;
 
-                // =========================
-                // HITUNG JARAK
-                // =========================
+                //HITUNG JARAK
                 $distanceFromStore = $this->calculateDistanceInMeters(
                     $salesLatitude,
                     $salesLongitude,
@@ -251,9 +243,7 @@ class StoreVisitController extends Controller
 
                 $isOutsideRadius = $distanceFromStore > $radiusInMeters;
 
-                // =========================
-                // UPLOAD FOTO
-                // =========================
+                //UPLOAD FOTO
                 $photoPaths = [];
 
                 foreach ($request->file('photos', []) as $photo) {
@@ -267,9 +257,7 @@ class StoreVisitController extends Controller
                     $photoPaths[] = $uploaded->getSecurePath();
                 }
 
-                // =========================
                 // SIMPAN REPORT
-                // =========================
                 VisitReport::create([
                     'store_visit_id'       => $visit->id,
                     'pic_name'             => $request->pic_name,
@@ -290,9 +278,7 @@ class StoreVisitController extends Controller
                     ),
                 ]);
 
-                // =========================
                 // SELESAIKAN VISIT
-                // =========================
                 $visit->update([
                     'status'           => 'COMPLETED',
                     'active_store_key' => null,

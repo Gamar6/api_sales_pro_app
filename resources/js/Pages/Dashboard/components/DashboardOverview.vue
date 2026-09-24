@@ -20,11 +20,7 @@ const props = defineProps({
 
 const showOutsideRadiusAlerts = ref(true);
 
-/*
-|--------------------------------------------------------------------------
-| Sales Order Performance
-|--------------------------------------------------------------------------
-*/
+// Sales Order Performance
 
 const chartMaxValue = computed(() => {
     if (!props.salesOrderChart.length) {
@@ -95,11 +91,7 @@ const getBarHeight = (orders) => {
     return Math.max(percentage, 6);
 };
 
-/*
-|--------------------------------------------------------------------------
-| Area Performance
-|--------------------------------------------------------------------------
-*/
+//Area Performance
 
 const sortedAreas = computed(() => {
     return [...props.stores]
@@ -176,11 +168,7 @@ const overallAreaPercentage = computed(() => {
     );
 });
 
-/*
-|--------------------------------------------------------------------------
-| Outside Radius
-|--------------------------------------------------------------------------
-*/
+//Outside Radius
 
 const outsideRadiusCount = computed(() => {
     return props.outsideRadiusAlerts.length;
@@ -237,16 +225,12 @@ const goToVisitReports = () => {
 
 <template>
     <section class="flex flex-col gap-space-xl">
-        <!-- ============================================================= -->
         <!-- SALES + AREA -->
-        <!-- ============================================================= -->
 
         <div
             class="grid grid-cols-1 gap-space-lg xl:grid-cols-3"
         >
-            <!-- ========================================================= -->
             <!-- SALES ORDER -->
-            <!-- ========================================================= -->
 
             <article
                 class="rounded-lg bg-surface-container-lowest p-space-lg shadow-sm xl:col-span-2"
@@ -425,9 +409,7 @@ const goToVisitReports = () => {
                 </div>
             </article>
 
-            <!-- ========================================================= -->
             <!-- AREA -->
-            <!-- ========================================================= -->
 
             <article
                 class="rounded-lg bg-surface-container-lowest p-space-lg shadow-sm"
@@ -617,9 +599,7 @@ const goToVisitReports = () => {
             </article>
         </div>
 
-        <!-- ============================================================= -->
         <!-- OUTSIDE RADIUS -->
-        <!-- ============================================================= -->
 
         <article
             v-if="showOutsideRadiusAlerts"
@@ -814,9 +794,7 @@ const goToVisitReports = () => {
             </div>
         </article>
 
-        <!-- ============================================================= -->
         <!-- NO ALERT -->
-        <!-- ============================================================= -->
 
         <article
             v-else

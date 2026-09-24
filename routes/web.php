@@ -30,6 +30,7 @@ Route::get('/dashboard/export', [
     'exportSummary',
 ])->name('dashboard.export');
 
+
 Route::middleware(['auth', 'active'])->group(function () {
 
     Route::get(
@@ -51,6 +52,11 @@ Route::middleware(['auth', 'active'])->group(function () {
         '/visit-reports',
         [VisitReportController::class, 'index']
     )->name('visit-reports');
+
+    Route::get(
+        '/visit-reports/export',
+        [VisitReportController::class, 'export']
+    )->name('visit-reports.export');
 
     Route::get(
         '/product-catalog',

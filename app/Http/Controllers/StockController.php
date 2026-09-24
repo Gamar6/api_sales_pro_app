@@ -17,20 +17,10 @@ class StockController extends Controller
 
     public function index(Request $request)
     {
-        // ============================================================
-        // Company ID dikunci ke Company 1
-        // ============================================================
         $companyId = 1;
 
-        // ============================================================
-        // Ambil semua produk yang pernah dijual + stok
-        // + harga + berat dari Odoo
-        // ============================================================
         $rawProducts = $this->odoo->getSoldProductsWithStock($companyId);
 
-        // ============================================================
-        // Format data produk
-        // ============================================================
         $products = array_map(function ($item) {
 
             $qty = (float) ($item['raw_qty'] ?? 0);
@@ -56,9 +46,6 @@ class StockController extends Controller
 
         }, $rawProducts);
 
-        // ============================================================
-        // Summary statistik
-        // ============================================================
         $totalSkus = count($products);
 
         $lowStockCount = count(
@@ -70,9 +57,6 @@ class StockController extends Controller
             )
         );
 
-        // ============================================================
-        // Response JSON
-        // ============================================================
         return response()->json([
             'status' => 'success',
             'total_skus' => $totalSkus,

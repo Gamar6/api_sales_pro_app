@@ -49,11 +49,7 @@ class DashboardSummaryExport
         unset($spreadsheet);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Summary
-    |--------------------------------------------------------------------------
-    */
+    //Summary
 
     protected function buildSummarySheet($sheet): void
     {
@@ -90,11 +86,7 @@ class DashboardSummaryExport
         );
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Sales Performance
-    |--------------------------------------------------------------------------
-    */
+    //Sales Performance
 
     protected function buildSalesPerformanceSheet($sheet): void
     {
@@ -145,11 +137,7 @@ class DashboardSummaryExport
         );
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Area Performance
-    |--------------------------------------------------------------------------
-    */
+    //Area Performance
 
     protected function buildAreaPerformanceSheet($sheet): void
     {
@@ -196,11 +184,7 @@ class DashboardSummaryExport
         );
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Radius Exceptions
-    |--------------------------------------------------------------------------
-    */
+    //Radius Exceptions
 
     protected function buildRadiusExceptionsSheet($sheet): void
     {
@@ -249,11 +233,7 @@ class DashboardSummaryExport
         );
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Styling
-    |--------------------------------------------------------------------------
-    */
+    //Styling
 
     protected function styleTitle($sheet, string $range): void
     {
@@ -310,11 +290,7 @@ class DashboardSummaryExport
         }
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Helpers
-    |--------------------------------------------------------------------------
-    */
+    //Helpers
 
     protected function formatPeriod(): string
     {
