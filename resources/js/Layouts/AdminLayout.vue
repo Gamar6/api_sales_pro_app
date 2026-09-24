@@ -150,7 +150,6 @@ const isCurrentRoute = (path) => page.url.startsWith(path);
 
         <!-- MAIN CONTENT WRAPPER -->
         <div class="flex-1 flex flex-col min-w-0">
-            <!-- TOPBAR HEADER (60% Brand Primary: #FFFFFF) -->
             <header
                 class="h-16 bg-white border-b border-slate-200/80 px-6 flex items-center justify-between sticky top-0 z-20 shadow-sm"
             >
@@ -192,7 +191,6 @@ const isCurrentRoute = (path) => page.url.startsWith(path);
 
                     <!-- User Profile Dropdown -->
                     <Dropdown align="right" width="48">
-                        <!-- 1. TRIGGER: Tampilan kustom yang diklik untuk membuka dropdown -->
                         <template #trigger>
                             <button
                                 type="button"
@@ -229,7 +227,6 @@ const isCurrentRoute = (path) => page.url.startsWith(path);
                                     </p>
                                 </div>
 
-                                <!-- Icon Panah kecil kebawah (Opsional, agar mirip bawaan Breeze) -->
                                 <svg
                                     class="ms-1 h-4 w-4 fill-current text-slate-400 hidden md:block"
                                     xmlns="http://www.w3.org/2000/svg"
@@ -244,7 +241,6 @@ const isCurrentRoute = (path) => page.url.startsWith(path);
                             </button>
                         </template>
 
-                        <!-- 2. CONTENT: Isi menu dropdown (Profile, Logout, dll) -->
                         <template #content>
                             <div class="px-4 py-2 border-b border-gray-100">
                                 <div class="text-sm font-medium text-gray-800">
