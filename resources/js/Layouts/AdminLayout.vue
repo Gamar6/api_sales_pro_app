@@ -74,7 +74,7 @@ const isCurrentRoute = (path) => page.url.startsWith(path);
                         v-if="isSidebarOpen"
                         class="font-bold text-lg tracking-wide whitespace-nowrap text-white"
                     >
-                        Sales Pro
+                        Fiva Sales App
                         <span
                             class="text-[#F48110] text-xs uppercase font-extrabold tracking-widest block -mt-1"
                             >App</span

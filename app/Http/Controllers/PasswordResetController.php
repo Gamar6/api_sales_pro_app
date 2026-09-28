@@ -15,9 +15,9 @@ class PasswordResetController extends Controller
     {
         $request->validate(['email' => 'required|email']);
 
-$status = Password::sendResetLink(
-            $request->only('email')
-        );
+        $status = Password::sendResetLink(
+                    $request->only('email')
+                );
 
         return response()->json([
             'message' => 'Jika email terdaftar, instruksi pemulihan password telah dikirim.'
