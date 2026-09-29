@@ -70,6 +70,11 @@ class UpdateUserRequest extends FormRequest
                 'required',
                 Rule::in(['sales', 'admin', 'superadmin']),
             ],
+
+            'as_cp' => [
+                'sometimes',
+                'boolean',
+            ],
         ];
     }
 }

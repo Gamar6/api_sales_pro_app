@@ -19,6 +19,7 @@ class User extends Authenticatable
         'password',
         'nohp',
         'role',
+        'as_cp',
         'status',
         'profile_photo_url',
         'profile_photo_public_id',
@@ -31,6 +32,7 @@ class User extends Authenticatable
 
     protected $casts = [
         'password' => 'hashed',
+        'as_cp' => 'boolean',
     ];
 
     public function storeAssignments()

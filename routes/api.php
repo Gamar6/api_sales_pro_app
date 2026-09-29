@@ -6,6 +6,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RetentionController;
 use App\Http\Controllers\StockController;
 use App\Http\Controllers\StoreVisitController;
+use App\Http\Controllers\ContactPersonController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -20,6 +21,11 @@ Route::post(
     '/reset-password',
     [PasswordResetController::class, 'reset']
 );
+
+Route::get(
+    '/contact-persons',
+    [ContactPersonController::class, 'index']
+)->middleware('throttle:60,1');
 
 Route::middleware(['auth:sanctum', 'active'])->group(function () {
 

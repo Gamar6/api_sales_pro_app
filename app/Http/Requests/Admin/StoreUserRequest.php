@@ -57,6 +57,11 @@ class StoreUserRequest extends FormRequest
                 Rule::in($allowedRoles),
             ],
 
+            'as_cp' => [
+                'sometimes',
+                'boolean',
+            ],
+
             'password' => [
                 'required',
                 'string',

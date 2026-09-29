@@ -56,6 +56,7 @@ class UserManagementController extends Controller
                 'email',
                 'nohp',
                 'role',
+                'as_cp',
                 'status',
                 'profile_photo_url',
                 'created_at',
@@ -99,6 +100,9 @@ class UserManagementController extends Controller
             'email' => $validated['email'],
             'nohp' => $validated['nohp'],
             'role' => $validated['role'],
+            'as_cp' => $validated['role'] === 'admin'
+                ? ($validated['as_cp'] ?? false)
+                : false,
             'status' => 'active',
             'password' => Hash::make($validated['password']),
         ]);
@@ -148,6 +152,9 @@ class UserManagementController extends Controller
             'email' => $validated['email'],
             'nohp' => $validated['nohp'],
             'role' => $validated['role'],
+            'as_cp' => $validated['role'] === 'admin'
+                ? ($validated['as_cp'] ?? false)
+                : false,
         ]);
 
         return back()->with(
