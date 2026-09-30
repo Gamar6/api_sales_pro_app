@@ -6,9 +6,7 @@ import AdminLayout from "@/Layouts/AdminLayout.vue";
 const page = usePage();
 
 /*
-|--------------------------------------------------------------------------
 | Props
-|--------------------------------------------------------------------------
 */
 
 const props = defineProps({
@@ -33,9 +31,7 @@ const props = defineProps({
 });
 
 /*
-|--------------------------------------------------------------------------
 | State
-|--------------------------------------------------------------------------
 */
 
 const showCreateModal = ref(false);
@@ -51,9 +47,7 @@ const roleFilter = ref(props.filters?.role ?? "");
 const statusFilter = ref(props.filters?.status ?? "");
 
 /*
-|--------------------------------------------------------------------------
 | Role
-|--------------------------------------------------------------------------
 */
 
 const isSuperadmin = computed(() => props.currentUser?.role === "superadmin");
@@ -61,9 +55,7 @@ const isSuperadmin = computed(() => props.currentUser?.role === "superadmin");
 const isAdmin = computed(() => props.currentUser?.role === "admin");
 
 /*
-|--------------------------------------------------------------------------
 | Forms
-|--------------------------------------------------------------------------
 */
 
 const createForm = useForm({
@@ -96,9 +88,7 @@ const statusForm = useForm({
 });
 
 /*
-|--------------------------------------------------------------------------
 | Search & Filter
-|--------------------------------------------------------------------------
 */
 
 let searchTimeout = null;
@@ -140,9 +130,7 @@ const clearFilters = () => {
 };
 
 /*
-|--------------------------------------------------------------------------
 | Create User
-|--------------------------------------------------------------------------
 */
 
 const openCreateModal = () => {
@@ -174,9 +162,7 @@ const submitCreate = () => {
 };
 
 /*
-|--------------------------------------------------------------------------
 | Edit User
-|--------------------------------------------------------------------------
 */
 
 const openEditModal = (user) => {
@@ -219,9 +205,7 @@ const submitEdit = () => {
 };
 
 /*
-|--------------------------------------------------------------------------
 | Reset Password
-|--------------------------------------------------------------------------
 */
 
 const openResetPasswordModal = (user) => {
@@ -262,9 +246,7 @@ const submitResetPassword = () => {
 };
 
 /*
-|--------------------------------------------------------------------------
 | Status
-|--------------------------------------------------------------------------
 */
 
 const openStatusModal = (user, status) => {
@@ -304,9 +286,7 @@ const submitStatus = () => {
 };
 
 /*
-|--------------------------------------------------------------------------
 | Helpers
-|--------------------------------------------------------------------------
 */
 
 const formatDate = (date) => {
@@ -364,9 +344,7 @@ const avatarInitial = (name) => {
 };
 
 /*
-|--------------------------------------------------------------------------
 | Permission Helpers
-|--------------------------------------------------------------------------
 */
 
 const canEditUser = (user) => {
@@ -407,9 +385,7 @@ const flashError = computed(() => page.props.flash?.error);
 
     <AdminLayout>
         <div class="min-h-screen bg-[#F8FAFC]">
-            <!-- ========================================================= -->
             <!-- PAGE HEADER -->
-            <!-- ========================================================= -->
 
             <div class="border-b border-slate-200 bg-white">
                 <div class="px-6 py-6 lg:px-8">
@@ -464,9 +440,7 @@ const flashError = computed(() => page.props.flash?.error);
                 </div>
             </div>
 
-            <!-- ========================================================= -->
             <!-- FLASH MESSAGE -->
-            <!-- ========================================================= -->
 
             <div v-if="flashSuccess || flashError" class="px-6 pt-6 lg:px-8">
                 <div
@@ -516,14 +490,10 @@ const flashError = computed(() => page.props.flash?.error);
                 </div>
             </div>
 
-            <!-- ========================================================= -->
             <!-- CONTENT -->
-            <!-- ========================================================= -->
 
             <div class="space-y-5 p-6 lg:p-8">
-                <!-- ===================================================== -->
                 <!-- FILTER CARD -->
-                <!-- ===================================================== -->
 
                 <div
                     class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
@@ -609,9 +579,7 @@ const flashError = computed(() => page.props.flash?.error);
                     </div>
                 </div>
 
-                <!-- ===================================================== -->
                 <!-- USER TABLE -->
-                <!-- ===================================================== -->
 
                 <div
                     class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
@@ -974,9 +942,7 @@ const flashError = computed(() => page.props.flash?.error);
                         </table>
                     </div>
 
-                    <!-- ================================================= -->
                     <!-- PAGINATION -->
-                    <!-- ================================================= -->
 
                     <div
                         v-if="users.links && users.links.length > 3"
@@ -1031,9 +997,7 @@ const flashError = computed(() => page.props.flash?.error);
             </div>
         </div>
 
-        <!-- ============================================================= -->
         <!-- CREATE USER MODAL -->
-        <!-- ============================================================= -->
 
         <div
             v-if="showCreateModal"
@@ -1328,9 +1292,7 @@ const flashError = computed(() => page.props.flash?.error);
             </div>
         </div>
 
-        <!-- ============================================================= -->
         <!-- EDIT USER MODAL -->
-        <!-- ============================================================= -->
 
         <div
             v-if="showEditModal && selectedUser"
