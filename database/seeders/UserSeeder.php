@@ -22,6 +22,16 @@ class UserSeeder extends Seeder
                 'updated_at' => now(),
             ],
             [
+                'name' => 'Super Admin Fiva Food',
+                'username' => 'superadmin',
+                'email' => 'superadmin@fivafood.com',
+                'nohp' => '081234567890',
+                'password' => Hash::Make('password'),
+                'role' => 'superadmin',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
                 'name' => 'Budi Sales 1',
                 'username' => 'sales1',
                 'email' => 'sales1@fivafood.com',
