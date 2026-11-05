@@ -16,13 +16,17 @@ class AppServiceProvider extends ServiceProvider
         //
     }
 
-    //Bootstrap any application services.
+    /**
+     * Bootstrap any application services.
+     */
     public function boot(): void
     {
         Vite::prefetch(concurrency: 3);
 
         ResetPassword::createUrlUsing(function ($notifiable, $token) {
-            return 'appsales://reset-password?token=' . $token . '&email=' . $notifiable->getEmailForPasswordReset();
+            return url('/reset-password/' . $token) . '?' . http_build_query([
+                'email' => $notifiable->getEmailForPasswordReset(),
+            ]);
         });
     }
 }

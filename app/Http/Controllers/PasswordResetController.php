@@ -14,6 +14,11 @@ class PasswordResetController extends Controller
     public function sendResetLinkEmail(Request $request)
     {
         $request->validate(['email' => 'required|email']);
+        \Log::info('Password reset config diagnostic', [
+            'app_key_set' => filled(config('app.key')),
+            'app_key_type' => gettype(config('app.key')),
+            'app_key_length' => strlen((string) config('app.key')),
+        ]);
 
         $status = Password::sendResetLink(
                     $request->only('email')
