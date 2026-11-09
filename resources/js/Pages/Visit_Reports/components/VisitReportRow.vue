@@ -191,6 +191,13 @@ const formatDistance = (distance) => {
                 </span>
 
                 <span
+                    v-if="visit.store_type === 'field'"
+                    class="w-fit rounded-full bg-tertiary-container px-2 py-0.5 text-[10px] font-semibold text-on-tertiary-container"
+                >
+                    Field Store
+                </span>
+
+                <span
                     class="font-body-sm text-body-sm text-on-surface-variant truncate"
                 >
                     {{

@@ -126,7 +126,11 @@ const storeAddress = computed(() => {
                     <span
                         class="px-2 py-0.5 rounded bg-tertiary-container text-on-primary font-code-metric text-[11px] font-bold"
                     >
-                        Visit #{{ visit.id }}
+                        {{
+                            visit.store_type === "field"
+                                ? `Field Report #${visit.report?.id ?? visit.store_id}`
+                                : `Visit #${visit.id}`
+                        }}
                     </span>
 
                     <span

@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\Api\V1\FieldStoreController;
+use App\Http\Controllers\Api\V1\VisitReportController as ApiVisitReportController;
 use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RetentionController;
@@ -28,6 +30,11 @@ Route::get(
 )->middleware('throttle:60,1');
 
 Route::middleware(['auth:sanctum', 'active'])->group(function () {
+
+    Route::prefix('v1')->group(function () {
+        Route::post('/field-stores', [FieldStoreController::class, 'store']);
+        Route::post('/visit-reports', [ApiVisitReportController::class, 'store']);
+    });
 
     Route::get('/user', function (Request $request) {
         return response()->json([

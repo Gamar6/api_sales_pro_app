@@ -86,11 +86,15 @@ defineProps({
 
             <div class="flex flex-col col-span-2">
                 <span class="text-[11px] text-secondary">
-                    Odoo Partner ID
+                    {{
+                        visit.store_type === "field"
+                            ? "Field Store ID"
+                            : "Odoo Partner ID"
+                    }}
                 </span>
 
                 <span class="font-code-metric font-bold text-primary">
-                    #{{ visit.odoo_partner_id }}
+                    #{{ visit.store_id ?? visit.odoo_partner_id ?? "-" }}
                 </span>
             </div>
 
@@ -106,15 +110,19 @@ defineProps({
                     <span
                         class="rounded-full px-2 py-1 text-[10px] font-bold"
                         :class="
-                            visit.report?.is_outside_radius
+                            visit.report?.is_outside_radius === true
                                 ? 'bg-amber-100 text-amber-700'
-                                : 'bg-emerald-100 text-emerald-700'
+                                : visit.report?.is_outside_radius === false
+                                  ? 'bg-emerald-100 text-emerald-700'
+                                  : 'bg-surface-container text-secondary'
                         "
                     >
                         {{
-                            visit.report?.is_outside_radius
+                            visit.report?.is_outside_radius === true
                                 ? "Outside Radius"
-                                : "Within Radius"
+                                : visit.report?.is_outside_radius === false
+                                  ? "Within Radius"
+                                  : "Not calculated"
                         }}
                     </span>
                 </div>

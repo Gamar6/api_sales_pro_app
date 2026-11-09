@@ -389,12 +389,11 @@ class StoreVisitController extends Controller
         $salesId = $request->user()->id;
 
 
-        $visits = StoreVisit::with(['report'])
+        $visits = StoreVisit::with(['report', 'fieldStore'])
             ->where('sales_id', $salesId)
             ->orderBy('visit_date', 'desc')
             ->orderBy('check_in_at', 'desc')
             ->get();
-
 
         $partnerIds = $visits->pluck('odoo_partner_id')
             ->filter()
@@ -422,11 +421,18 @@ class StoreVisitController extends Controller
 
 
         $data = $visits->map(function ($visit) use ($partnersMap) {
-            $partnerId = (int) $visit->odoo_partner_id;
-            $partner = $partnersMap->get($partnerId);
+            $isFieldStore = $visit->store_type === 'field';
+            $partner = $isFieldStore
+                ? null
+                : $partnersMap->get((int) $visit->odoo_partner_id);
+            $fieldStore = $visit->fieldStore;
 
             return [
                 'id'           => $visit->id,
+                'store_type'   => $visit->store_type ?? 'regular',
+                'store_id'     => $isFieldStore
+                    ? $visit->field_store_id
+                    : $visit->odoo_partner_id,
                 'sales_id'     => $visit->sales_id,
                 'visit_date'   => $visit->visit_date,
                 'status'       => $visit->status,
@@ -434,10 +440,24 @@ class StoreVisitController extends Controller
                 'check_out_at' => $visit->check_out_at,
                 'report'       => $visit->report,
                 'partner'      => [
-                    // Ambil 'name' dari Odoo. Jika Odoo gagal/kosong, baru fallback ke ID
-                    'name'   => $partner['name'] ?? ('Toko #' . $visit->odoo_partner_id),
-                    'street' => $partner['street'] ?? '-',
-                    'city'   => $partner['city'] ?? '-',
+                    'name'   => $isFieldStore
+                        ? ($fieldStore?->store_name ?? 'Unknown Field Store')
+                        : ($partner['name'] ?? ('Toko #' . $visit->odoo_partner_id)),
+                    'street' => $isFieldStore
+                        ? ($fieldStore?->address ?? '-')
+                        : ($partner['street'] ?? '-'),
+                    'city'   => $isFieldStore
+                        ? null
+                        : ($partner['city'] ?? '-'),
+                    'phone' => $isFieldStore
+                        ? $fieldStore?->phone_number
+                        : ($partner['phone'] ?? null),
+                    'owner_name' => $isFieldStore
+                        ? $fieldStore?->owner_name
+                        : null,
+                    'photo_url' => $isFieldStore
+                        ? $fieldStore?->photo_url
+                        : null,
                 ],
             ];
         });

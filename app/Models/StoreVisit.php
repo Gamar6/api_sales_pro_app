@@ -13,6 +13,8 @@ class StoreVisit extends Model
     use HasFactory;
 
     protected $fillable = [
+        'store_type',
+        'field_store_id',
         'odoo_partner_id',
         'sales_id',
         'visit_date',
@@ -25,6 +27,7 @@ class StoreVisit extends Model
 
     protected $casts = [
         'odoo_partner_id' => 'integer',
+        'field_store_id' => 'integer',
         'sales_id'        => 'integer',
         'active_store_key' => 'integer',
         'active_sales_key' => 'integer',
@@ -58,5 +61,10 @@ class StoreVisit extends Model
     public function partner(): BelongsTo
     {
         return $this->belongsTo(OdooPartner::class, 'odoo_partner_id', 'id');
+    }
+
+    public function fieldStore(): BelongsTo
+    {
+        return $this->belongsTo(FieldStore::class);
     }
 }

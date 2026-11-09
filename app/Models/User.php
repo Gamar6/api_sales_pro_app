@@ -47,4 +47,14 @@ class User extends Authenticatable
             'sales_id'
         );
     }
+
+    public function fieldStores(): HasMany
+    {
+        return $this->hasMany(FieldStore::class);
+    }
+
+    public function visitReports(): HasMany
+    {
+        return $this->hasMany(VisitReport::class);
+    }
 }

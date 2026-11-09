@@ -40,6 +40,7 @@ class VisitReportController extends Controller
             ->with([
                 'sales:id,name,username,profile_photo_url',
                 'report',
+                'fieldStore',
             ])
             ->when(
                 $filters['date'],
@@ -127,9 +128,11 @@ class VisitReportController extends Controller
                     );
 
                     $storeName = mb_strtolower(
-                        $partner['name']
-                            ?? $partner['display_name']
-                            ?? ''
+                        $visit->store_type === 'field'
+                            ? ($visit->fieldStore?->store_name ?? '')
+                            : ($partner['name']
+                                ?? $partner['display_name']
+                                ?? '')
                     );
 
                     return str_contains(
@@ -239,12 +242,29 @@ class VisitReportController extends Controller
                         );
                 }
 
-                $partner = $partnerMap->get(
-                    $visit->odoo_partner_id
-                );
+                $isFieldStore = ($visit->store_type ?? 'regular') === 'field';
+                $partner = $isFieldStore
+                    ? [
+                        'id' => $visit->fieldStore?->id,
+                        'name' => $visit->fieldStore?->store_name ?? 'Unknown Field Store',
+                        'display_name' => $visit->fieldStore?->store_name ?? 'Unknown Field Store',
+                        'street' => $visit->fieldStore?->address,
+                        'phone' => $visit->fieldStore?->phone_number,
+                        'owner_name' => $visit->fieldStore?->owner_name,
+                        'photo_url' => $visit->fieldStore?->photo_url,
+                        'latitude' => $visit->fieldStore?->latitude,
+                        'longitude' => $visit->fieldStore?->longitude,
+                    ]
+                    : $partnerMap->get($visit->odoo_partner_id);
 
                 return [
                     'id' => $visit->id,
+
+                    'store_type' => $visit->store_type ?? 'regular',
+
+                    'store_id' => $isFieldStore
+                        ? $visit->field_store_id
+                        : $visit->odoo_partner_id,
 
                     'odoo_partner_id' =>
                         $visit->odoo_partner_id,
@@ -289,55 +309,60 @@ class VisitReportController extends Controller
 
                     'partner' => [
                         'id' =>
-                            $partner['id']
-                            ?? $visit->odoo_partner_id,
+                            is_array($partner)
+                                ? ($partner['id'] ?? $visit->odoo_partner_id)
+                                : $visit->odoo_partner_id,
 
                         'name' =>
-                            $partner['name']
-                            ?? $partner['display_name']
-                            ?? 'Unknown Store',
+                            is_array($partner)
+                                ? ($partner['name'] ?? $partner['display_name'] ?? 'Unknown Store')
+                                : 'Unknown Store',
 
                         'display_name' =>
-                            $partner['display_name']
-                            ?? null,
+                            is_array($partner) ? ($partner['display_name'] ?? null) : null,
 
                         'street' =>
-                            $partner['street']
-                            ?? null,
+                            is_array($partner) ? ($partner['street'] ?? null) : null,
 
                         'street2' =>
-                            $partner['street2']
-                            ?? null,
+                            is_array($partner) ? ($partner['street2'] ?? null) : null,
 
                         'city' =>
-                            $partner['city']
-                            ?? null,
+                            is_array($partner) ? ($partner['city'] ?? null) : null,
 
                         'phone' =>
-                            $partner['phone']
-                            ?? null,
+                            is_array($partner) ? ($partner['phone'] ?? null) : null,
 
                         'mobile' =>
-                            $partner['mobile']
-                            ?? null,
+                            is_array($partner) ? ($partner['mobile'] ?? null) : null,
 
                         'email' =>
-                            $partner['email']
-                            ?? null,
+                            is_array($partner) ? ($partner['email'] ?? null) : null,
 
                         'vat' =>
-                            $partner['vat']
-                            ?? null,
+                            is_array($partner) ? ($partner['vat'] ?? null) : null,
 
                         'state' =>
-                            isset($partner['state_id'][1])
+                            is_array($partner) && isset($partner['state_id'][1])
                                 ? $partner['state_id'][1]
                                 : null,
 
                         'country' =>
-                            isset($partner['country_id'][1])
+                            is_array($partner) && isset($partner['country_id'][1])
                                 ? $partner['country_id'][1]
                                 : null,
+
+                        'owner_name' =>
+                            is_array($partner) ? ($partner['owner_name'] ?? null) : null,
+
+                        'photo_url' =>
+                            is_array($partner) ? ($partner['photo_url'] ?? null) : null,
+
+                        'latitude' =>
+                            is_array($partner) ? ($partner['latitude'] ?? null) : null,
+
+                        'longitude' =>
+                            is_array($partner) ? ($partner['longitude'] ?? null) : null,
                     ],
 
                     'report' => $visit->report
@@ -349,7 +374,7 @@ class VisitReportController extends Controller
                                 $visit->report->pic_name,
 
                             'activities' =>
-                                $visit->report->activities,
+                                $visit->report->activities ?? [],
 
                             'stock_percentage' =>
                                 $visit->report->stock_percentage,
@@ -361,13 +386,18 @@ class VisitReportController extends Controller
                                 $visit->report->notes,
 
                             'photos' =>
-                                $visit->report->photos,
+                                $visit->report->photos
+                                ?? ($visit->report->check_in_photo
+                                    ? [$visit->report->check_in_photo]
+                                    : []),
 
                             'sales_latitude' =>
-                                $visit->report->sales_latitude,
+                                $visit->report->sales_latitude
+                                ?? $visit->report->check_in_lat,
 
                             'sales_longitude' =>
-                                $visit->report->sales_longitude,
+                                $visit->report->sales_longitude
+                                ?? $visit->report->check_in_lng,
 
                             'sales_accuracy' =>
                                 $visit->report->sales_accuracy,
@@ -383,7 +413,18 @@ class VisitReportController extends Controller
                                     ? $visit->report
                                         ->location_captured_at
                                         ->toDateTimeString()
-                                    : null,
+                                    : ($visit->report->visited_at
+                                        ? $visit->report->visited_at->toDateTimeString()
+                                        : null),
+
+                            'check_in_photo' =>
+                                $visit->report->check_in_photo,
+
+                            'check_in_lat' =>
+                                $visit->report->check_in_lat,
+
+                            'check_in_lng' =>
+                                $visit->report->check_in_lng,
                         ]
                         : null,
                 ];
@@ -491,9 +532,11 @@ class VisitReportController extends Controller
                     );
 
                     $storeName = mb_strtolower(
-                        $partner['name']
-                            ?? $partner['display_name']
-                            ?? ''
+                        $visit->store_type === 'field'
+                            ? ($visit->fieldStore?->store_name ?? '')
+                            : ($partner['name']
+                                ?? $partner['display_name']
+                                ?? '')
                     );
 
                     return str_contains(
@@ -509,9 +552,12 @@ class VisitReportController extends Controller
 
         $exportData = $visits->map(
             function ($visit) use ($partnerMap) {
-                $partner = $partnerMap->get(
-                    $visit->odoo_partner_id
-                );
+            $isFieldStore = ($visit->store_type ?? 'regular') === 'field';
+            $partner = $isFieldStore
+                ? [
+                    'name' => $visit->fieldStore?->store_name,
+                ]
+                : $partnerMap->get($visit->odoo_partner_id);
 
                 $duration = '-';
 
@@ -655,6 +701,7 @@ class VisitReportController extends Controller
             ->with([
                 'sales:id,name,username,profile_photo_url',
                 'report',
+                'fieldStore',
             ])
             ->when(
                 $filters['date'],
