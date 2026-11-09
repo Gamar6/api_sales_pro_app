@@ -30,3 +30,8 @@ Thumbs.db
 /python_engine/database/master/
 /python_engine/database/processed/
 /python_engine/database/raw/
+
+# Python environment and cache
+/python_engine/.venv/
+/python_engine/**/__pycache__/
+*.py[cod]

@@ -14,7 +14,7 @@ class SyncRetentionData extends Command
     {
         $this->info('Memproses data retensi Odoo...');
 
-        $pythonPath = 'python';
+        $pythonPath = base_path('python_engine/.venv/bin/python');
         $scriptExtract = base_path('python_engine/aplikasi/extract_sales.py');
         $scriptTransform = base_path('python_engine/aplikasi/transform_retensi.py');
 
