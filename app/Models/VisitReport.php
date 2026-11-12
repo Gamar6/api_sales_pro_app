@@ -5,10 +5,19 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class VisitReport extends Model
 {
     use HasFactory;
+
+    public const CORRECTABLE_FIELDS = [
+        'pic_name',
+        'activities',
+        'stock_percentage',
+        'stock_pcs',
+        'notes',
+    ];
 
     protected $hidden = [
         'idempotency_key',
@@ -77,5 +86,26 @@ class VisitReport extends Model
     public function regularStore(): BelongsTo
     {
         return $this->belongsTo(StoreModel::class, 'store_id', 'odoo_id');
+    }
+
+    public function corrections(): HasMany
+    {
+        return $this->hasMany(VisitCorrection::class)->orderByDesc('id');
+    }
+
+    public function originalData(): array
+    {
+        return $this->only(self::CORRECTABLE_FIELDS);
+    }
+
+    public function effectiveData(): array
+    {
+        $latestCorrection = $this->relationLoaded('corrections')
+            ? $this->corrections->firstWhere('status', 'approved')
+            : $this->corrections()
+                ->where('status', 'approved')
+                ->first();
+
+        return $latestCorrection?->correction_data ?? $this->originalData();
     }
 }

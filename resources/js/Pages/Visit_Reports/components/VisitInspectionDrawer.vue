@@ -304,6 +304,77 @@ const storeAddress = computed(() => {
                 </div>
             </div>
 
+            <section
+                v-if="visit.report?.corrections?.length"
+                class="flex flex-col gap-space-base border-t border-outline-variant/30 pt-space-base"
+            >
+                <div class="flex items-center justify-between gap-2">
+                    <h3 class="font-title-md font-bold text-primary">
+                        Visit correction audit
+                    </h3>
+                    <span
+                        class="rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-800"
+                    >
+                        {{ visit.report.correction_count }} approved
+                    </span>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div class="rounded bg-surface-container-low p-3">
+                        <div class="mb-1 font-semibold text-secondary">
+                            Original stock
+                        </div>
+                        <div>
+                            {{ visit.report.original?.stock_percentage ?? "-" }}%
+                            ·
+                            {{ visit.report.original?.stock_pcs ?? "-" }} pcs
+                        </div>
+                    </div>
+                    <div class="rounded bg-amber-50 p-3 text-amber-950">
+                        <div class="mb-1 font-semibold">Effective stock</div>
+                        <div>
+                            {{ visit.report.stock_percentage ?? "-" }}%
+                            ·
+                            {{ visit.report.stock_pcs ?? "-" }} pcs
+                        </div>
+                    </div>
+                </div>
+
+                <div class="rounded bg-surface-container-low p-3 text-xs">
+                    <div class="mb-1 font-semibold text-secondary">
+                        Original report
+                    </div>
+                    <div>PIC: {{ visit.report.original?.pic_name ?? "-" }}</div>
+                    <div>
+                        Activities:
+                        {{ visit.report.original?.activities?.join(", ") ?? "-" }}
+                    </div>
+                    <div>
+                        Notes: {{ visit.report.original?.notes ?? "-" }}
+                    </div>
+                </div>
+
+                <ol class="flex flex-col gap-2">
+                    <li
+                        v-for="correction in visit.report.corrections"
+                        :key="correction.id"
+                        class="rounded border border-outline-variant/30 p-3"
+                    >
+                        <div
+                            class="flex flex-wrap justify-between gap-x-3 gap-y-1 text-[11px] text-secondary"
+                        >
+                            <span>
+                                {{ correction.user?.name ?? "Unknown Sales" }}
+                            </span>
+                            <time>{{ correction.approved_at ?? "-" }}</time>
+                        </div>
+                        <p class="mt-2 text-sm text-on-surface">
+                            {{ correction.reason }}
+                        </p>
+                    </li>
+                </ol>
+            </section>
+
             <!-- NO REPORT -->
 
             <div

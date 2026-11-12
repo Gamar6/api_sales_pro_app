@@ -7,6 +7,7 @@ use App\Http\Requests\SubmitVisitReportRequest;
 use App\Models\StoreVisit;
 use App\Models\User;
 use App\Models\VisitReport;
+use App\Services\VisitCorrectionService;
 use App\Services\Odoo\OdooClient;
 use App\Services\OdooService;
 use Carbon\CarbonImmutable;
@@ -384,12 +385,15 @@ class StoreVisitController extends Controller
         ], 200);
     }
 
-    public function history(Request $request)
+    public function history(
+        Request $request,
+        VisitCorrectionService $correctionService
+    )
     {
         $salesId = $request->user()->id;
 
 
-        $visits = StoreVisit::with(['report', 'fieldStore'])
+        $visits = StoreVisit::with(['report.corrections', 'fieldStore'])
             ->where('sales_id', $salesId)
             ->orderBy('visit_date', 'desc')
             ->orderBy('check_in_at', 'desc')
@@ -420,7 +424,7 @@ class StoreVisitController extends Controller
         }
 
 
-        $data = $visits->map(function ($visit) use ($partnersMap) {
+        $data = $visits->map(function ($visit) use ($partnersMap, $correctionService) {
             $isFieldStore = $visit->store_type === 'field';
             $partner = $isFieldStore
                 ? null
@@ -438,7 +442,16 @@ class StoreVisitController extends Controller
                 'status'       => $visit->status,
                 'check_in_at'  => $visit->check_in_at,
                 'check_out_at' => $visit->check_out_at,
-                'report'       => $visit->report,
+                'report'       => $visit->report?->makeHidden('corrections'),
+                'report_original' => $visit->report?->originalData(),
+                'report_effective' => $visit->report?->effectiveData(),
+                'corrections' => $visit->report?->corrections ?? [],
+                'correction_window' => [
+                    'deadline_at' => $visit->check_out_at
+                        ? $visit->check_out_at->copy()->addHours(12)->toDateTimeString()
+                        : null,
+                    'can_correct' => $correctionService->canCorrect($visit),
+                ],
                 'partner'      => [
                     'name'   => $isFieldStore
                         ? ($fieldStore?->store_name ?? 'Unknown Field Store')

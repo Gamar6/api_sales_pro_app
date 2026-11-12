@@ -3,6 +3,7 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\Api\V1\FieldStoreController;
 use App\Http\Controllers\Api\V1\VisitReportController as ApiVisitReportController;
+use App\Http\Controllers\Api\VisitCorrectionController;
 use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RetentionController;
@@ -35,6 +36,15 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::post('/field-stores', [FieldStoreController::class, 'store']);
         Route::post('/visit-reports', [ApiVisitReportController::class, 'store']);
     });
+
+    Route::post(
+        '/store-visits/{visit}/corrections',
+        [VisitCorrectionController::class, 'store']
+    );
+    Route::get(
+        '/store-visits/{visit}/corrections',
+        [VisitCorrectionController::class, 'history']
+    );
 
     Route::get('/user', function (Request $request) {
         return response()->json([

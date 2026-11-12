@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\OdooPartner;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class StoreVisit extends Model
@@ -44,6 +45,11 @@ class StoreVisit extends Model
     public function report(): HasOne
     {
         return $this->hasOne(VisitReport::class, 'store_visit_id');
+    }
+
+    public function corrections(): HasMany
+    {
+        return $this->hasMany(VisitCorrection::class)->orderByDesc('id');
     }
 
     public function scopeToday($query)

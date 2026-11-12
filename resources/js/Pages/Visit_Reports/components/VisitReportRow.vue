@@ -296,6 +296,17 @@ const formatDistance = (distance) => {
                 <span>Submitted</span>
 
                 <span
+                    v-if="visit.report?.correction_count"
+                    class="ml-1 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800"
+                    :title="`${visit.report.correction_count} approved correction(s)`"
+                >
+                    <span class="material-symbols-outlined text-[13px]">
+                        edit_note
+                    </span>
+                    {{ visit.report.correction_count }} corrected
+                </span>
+
+                <span
                     v-if="isOutsideRadius"
                     class="ml-1 inline-flex items-center gap-1 text-red-600"
                 >

@@ -39,7 +39,7 @@ class VisitReportController extends Controller
         $visitsQuery = StoreVisit::query()
             ->with([
                 'sales:id,name,username,profile_photo_url',
-                'report',
+                'report.corrections.user:id,name',
                 'fieldStore',
             ])
             ->when(
@@ -162,6 +162,11 @@ class VisitReportController extends Controller
             ->where('status', 'CANCELLED')
             ->count();
 
+        $correctedVisits = $allVisits
+            ->filter(fn ($visit) => $visit->report?->corrections
+                ->contains('status', 'approved'))
+            ->count();
+
         $averageDurationSeconds = $allVisits
             ->filter(function ($visit) {
                 return $visit->check_in_at
@@ -231,6 +236,8 @@ class VisitReportController extends Controller
         $visitData = $paginatedVisits
             ->map(function ($visit) use ($partnerMap) {
                 $durationSeconds = null;
+                $originalReportData = $visit->report?->originalData();
+                $effectiveReportData = $visit->report?->effectiveData();
 
                 if (
                     $visit->check_in_at
@@ -274,7 +281,7 @@ class VisitReportController extends Controller
                         : null,
 
                     'activities' =>
-                        $visit->report?->activities ?? [],
+                        $effectiveReportData['activities'] ?? [],
 
                     'status' =>
                         $visit->status,
@@ -371,19 +378,45 @@ class VisitReportController extends Controller
                                 $visit->report->id,
 
                             'pic_name' =>
-                                $visit->report->pic_name,
+                                $effectiveReportData['pic_name'],
 
                             'activities' =>
-                                $visit->report->activities ?? [],
+                                $effectiveReportData['activities'] ?? [],
 
                             'stock_percentage' =>
-                                $visit->report->stock_percentage,
+                                $effectiveReportData['stock_percentage'],
 
                             'stock_pcs' =>
-                                $visit->report->stock_pcs,
+                                $effectiveReportData['stock_pcs'],
 
                             'notes' =>
-                                $visit->report->notes,
+                                $effectiveReportData['notes'],
+
+                            'original' =>
+                                $originalReportData,
+
+                            'correction_count' =>
+                                $visit->report->corrections
+                                    ->where('status', 'approved')
+                                    ->count(),
+
+                            'corrections' =>
+                                $visit->report->corrections
+                                    ->map(fn ($correction) => [
+                                        'id' => $correction->id,
+                                        'reason' => $correction->reason,
+                                        'status' => $correction->status,
+                                        'approved_at' => $correction->approved_at
+                                            ?->toDateTimeString(),
+                                        'previous_data' => $correction->previous_data,
+                                        'correction_data' => $correction->correction_data,
+                                        'user' => [
+                                            'id' => $correction->user?->id,
+                                            'name' => $correction->user?->name
+                                                ?? 'Unknown Sales',
+                                        ],
+                                    ])
+                                    ->values(),
 
                             'photos' =>
                                 $visit->report->photos
@@ -484,6 +517,9 @@ class VisitReportController extends Controller
                     'completed_visits' =>
                         $completedVisits,
 
+                    'corrected_visits' =>
+                        $correctedVisits,
+
                     'active_visits' =>
                         $activeVisits,
 
@@ -580,7 +616,8 @@ class VisitReportController extends Controller
                     );
                 }
 
-                $activities = $visit->report?->activities ?? [];
+                $effectiveReportData = $visit->report?->effectiveData() ?? [];
+                $activities = $effectiveReportData['activities'] ?? [];
 
                 if (is_array($activities)) {
                     $activities = implode(
@@ -615,13 +652,13 @@ class VisitReportController extends Controller
 
                     'activities' => $activities,
 
-                    'pic_name' => $visit->report?->pic_name,
+                    'pic_name' => $effectiveReportData['pic_name'] ?? null,
 
                     'stock_percentage' =>
-                        $visit->report?->stock_percentage,
+                        $effectiveReportData['stock_percentage'] ?? null,
 
                     'stock_pcs' =>
-                        $visit->report?->stock_pcs,
+                        $effectiveReportData['stock_pcs'] ?? null,
 
                     'distance' =>
                         $visit->report?->distance_from_store,
@@ -645,7 +682,7 @@ class VisitReportController extends Controller
                             : null,
 
                     'notes' =>
-                        $visit->report?->notes,
+                        $effectiveReportData['notes'] ?? null,
                 ];
             }
         )->values()->all();
@@ -700,7 +737,7 @@ class VisitReportController extends Controller
         $query = StoreVisit::query()
             ->with([
                 'sales:id,name,username,profile_photo_url',
-                'report',
+                'report.corrections',
                 'fieldStore',
             ])
             ->when(

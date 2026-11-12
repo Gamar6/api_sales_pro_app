@@ -53,6 +53,18 @@ defineEmits(["select", "page-change"]);
                 <span
                     class="font-label-caps text-label-caps uppercase text-secondary"
                 >
+                    Corrected:
+
+                    <strong class="text-primary font-code-metric">
+                        {{ statistics.corrected_visits ?? 0 }}
+                    </strong>
+                </span>
+
+                <span class="h-3 w-px bg-outline-variant" />
+
+                <span
+                    class="font-label-caps text-label-caps uppercase text-secondary"
+                >
                     Completed:
 
                     <strong class="text-primary font-code-metric">
