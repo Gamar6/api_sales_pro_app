@@ -93,6 +93,7 @@ class FieldStoreVisitReportApiTest extends TestCase
             'pic_name' => 'Budi',
             'activities' => ['Pengecekan toko'],
             'stock_percentage' => 80,
+            'stock_pcs' => 25,
             'notes' => 'Kunjungan pertama',
             'check_in_photo' => UploadedFile::fake()->image('check-in.jpg'),
             'check_in_lat' => '-6.20000000',
@@ -106,12 +107,16 @@ class FieldStoreVisitReportApiTest extends TestCase
             ->assertJsonPath('data.store_id', $fieldStore->id)
             ->assertJsonPath('data.pic_name', 'Budi')
             ->assertJsonPath('data.activities.0', 'Pengecekan toko')
+            ->assertJsonPath('data.stock_percentage', null)
+            ->assertJsonPath('data.stock_pcs', 25)
             ->assertJsonPath('data.check_in_photo', 'https://res.cloudinary.com/test/check-in.jpg');
 
         $this->assertDatabaseHas('visit_reports', [
             'user_id' => $sales->id,
             'store_type' => 'field',
             'store_id' => $fieldStore->id,
+            'stock_percentage' => null,
+            'stock_pcs' => 25,
             'notes' => 'Kunjungan pertama',
             'sales_accuracy' => 4.5,
             'distance_from_store' => 0,
@@ -186,23 +191,104 @@ class FieldStoreVisitReportApiTest extends TestCase
             'name' => 'Toko Terdaftar',
         ]);
         Sanctum::actingAs($sales);
+        $this->mock(OdooClient::class, function ($mock): void {
+            $mock->shouldReceive('executeKw')
+                ->twice()
+                ->andReturn(
+                    [['id' => 902]],
+                    [
+                        ['product_uom_qty' => 40, 'product_uom' => [1, 'Units']],
+                    ]
+                );
+        });
 
         $this->postJson('/api/v1/visit-reports', [
             'store_type' => 'regular',
             'store_id' => $store->odoo_id,
+            'stock_percentage' => 15,
+            'stock_pcs' => 20,
             'check_in_lat' => -6.2,
             'check_in_lng' => 106.81666667,
             'visited_at' => '2026-11-06 09:00:00',
         ])->assertCreated()
             ->assertJsonPath('data.store_type', 'regular')
             ->assertJsonPath('data.store_id', $store->odoo_id)
+            ->assertJsonPath('data.stock_percentage', 50)
+            ->assertJsonPath('data.stock_pcs', 20)
             ->assertJsonPath('data.check_in_photo', null);
 
         $this->assertDatabaseHas('visit_reports', [
             'user_id' => $sales->id,
             'store_type' => 'regular',
             'store_id' => $store->odoo_id,
+            'stock_percentage' => 50,
+            'stock_pcs' => 20,
         ]);
+    }
+
+    public function test_regular_store_report_keeps_pcs_and_leaves_percentage_empty_without_a_pcs_order(): void
+    {
+        $sales = User::factory()->create(['status' => 'active']);
+        $store = StoreModel::create([
+            'odoo_id' => 502,
+            'name' => 'Toko Tanpa Order',
+        ]);
+        Sanctum::actingAs($sales);
+        $this->mock(OdooClient::class, function ($mock): void {
+            $mock->shouldReceive('executeKw')
+                ->once()
+                ->andReturn([]);
+        });
+
+        $this->postJson('/api/v1/visit-reports', [
+            'store_type' => 'regular',
+            'store_id' => $store->odoo_id,
+            'stock_pcs' => 12,
+            'stock_percentage' => 85,
+            'check_in_lat' => -6.2,
+            'check_in_lng' => 106.81666667,
+            'visited_at' => '2026-11-06 09:00:00',
+        ])->assertCreated()
+            ->assertJsonPath('data.stock_percentage', null)
+            ->assertJsonPath('data.stock_pcs', 12);
+
+        $this->assertDatabaseHas('visit_reports', [
+            'store_id' => $store->odoo_id,
+            'stock_percentage' => null,
+            'stock_pcs' => 12,
+        ]);
+    }
+
+    public function test_regular_store_report_leaves_percentage_empty_for_an_order_with_mixed_units(): void
+    {
+        $sales = User::factory()->create(['status' => 'active']);
+        $store = StoreModel::create([
+            'odoo_id' => 503,
+            'name' => 'Toko Dengan Satuan Campuran',
+        ]);
+        Sanctum::actingAs($sales);
+        $this->mock(OdooClient::class, function ($mock): void {
+            $mock->shouldReceive('executeKw')
+                ->twice()
+                ->andReturn(
+                    [['id' => 904]],
+                    [
+                        ['product_uom_qty' => 40, 'product_uom' => [1, 'Units']],
+                        ['product_uom_qty' => 2, 'product_uom' => [2, 'kg']],
+                    ]
+                );
+        });
+
+        $this->postJson('/api/v1/visit-reports', [
+            'store_type' => 'regular',
+            'store_id' => $store->odoo_id,
+            'stock_pcs' => 12,
+            'check_in_lat' => -6.2,
+            'check_in_lng' => 106.81666667,
+            'visited_at' => '2026-11-06 09:00:00',
+        ])->assertCreated()
+            ->assertJsonPath('data.stock_percentage', null)
+            ->assertJsonPath('data.stock_pcs', 12);
     }
 
     public function test_visit_report_rejects_a_store_id_of_the_wrong_type(): void
@@ -381,7 +467,16 @@ class FieldStoreVisitReportApiTest extends TestCase
         ]);
         Sanctum::actingAs($sales);
 
-        $this->mock(OdooClient::class);
+        $this->mock(OdooClient::class, function ($mock): void {
+            $mock->shouldReceive('executeKw')
+                ->twice()
+                ->andReturn(
+                    [['id' => 903]],
+                    [
+                        ['product_uom_qty' => 40, 'product_uom' => [1, 'pcs']],
+                    ]
+                );
+        });
         $this->mock(OdooService::class, function ($mock): void {
             $mock->shouldReceive('execute_kw')
                 ->once()
@@ -389,6 +484,14 @@ class FieldStoreVisitReportApiTest extends TestCase
                     'id' => 501,
                     'partner_latitude' => -6.2,
                     'partner_longitude' => 106.9,
+                ]]);
+            $mock->shouldReceive('getCompleteStoreData')
+                ->twice()
+                ->with([501])
+                ->andReturn([[
+                    'id' => 501,
+                    'name' => 'Toko Terdaftar',
+                    'display_name' => 'Toko Terdaftar',
                 ]]);
         });
 
@@ -403,6 +506,7 @@ class FieldStoreVisitReportApiTest extends TestCase
             'pic_name' => 'PIC Reguler',
             'activities' => ['Pengecekan stok'],
             'stock_percentage' => 80,
+            'stock_pcs' => 20,
             'notes' => 'Catatan tetap terpisah',
             'photos' => [UploadedFile::fake()->image('report.jpg')],
             'sales_latitude' => -6.2,
@@ -423,11 +527,19 @@ class FieldStoreVisitReportApiTest extends TestCase
         $report = VisitReport::query()->where('store_visit_id', $visit->id)->firstOrFail();
         $this->assertSame('PIC Reguler', $report->pic_name);
         $this->assertSame(['Pengecekan stok'], $report->activities);
-        $this->assertSame(80, $report->stock_percentage);
+        $this->assertSame(50, $report->stock_percentage);
+        $this->assertSame(20, $report->stock_pcs);
         $this->assertSame('Catatan tetap terpisah', $report->notes);
         $this->assertSame(
             ['https://res.cloudinary.com/test/regular-report.jpg'],
             $report->photos
         );
+
+        $this->actingAs($sales, 'web')
+            ->get('/visit-reports?quick_filter=all')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('visits.data.0.report.stock_percentage', 50)
+                ->where('visits.data.0.report.stock_pcs', 20));
     }
 }

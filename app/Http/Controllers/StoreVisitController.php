@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\VisitReport;
 use App\Services\VisitCorrectionService;
 use App\Services\Odoo\OdooClient;
+use App\Services\Odoo\OdooStoreService;
 use App\Services\OdooService;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -127,8 +128,11 @@ class StoreVisitController extends Controller
         }
     }
 
-    public function submitReport(SubmitVisitReportRequest $request, $visitId)
-    {
+    public function submitReport(
+        SubmitVisitReportRequest $request,
+        $visitId,
+        OdooStoreService $odooStore
+    ) {
         $salesId = $request->user()->id;
 
         //GPS Validation
@@ -167,7 +171,8 @@ class StoreVisitController extends Controller
                 $salesId,
                 $salesLatitude,
                 $salesLongitude,
-                $salesAccuracy
+                $salesAccuracy,
+                $odooStore
             ) {
                 //AMBIL VISIT
                 $visit = StoreVisit::where('id', $visitId)
@@ -191,6 +196,17 @@ class StoreVisitController extends Controller
                         'status' => 'error',
                         'message' => $message,
                     ], 422);
+                }
+
+                $stockPercentage = $request->input('stock_percentage');
+                if ($request->input('stock_pcs') !== null) {
+                    $stockPercentage = null;
+                    if ($visit->odoo_partner_id !== null) {
+                        $stockPercentage = $odooStore->calculateStockPercentage(
+                            (int) $visit->odoo_partner_id,
+                            (int) $request->input('stock_pcs')
+                        );
+                    }
                 }
 
                 // AMBIL KOORDINAT TOKO DARI ODOO
@@ -263,7 +279,7 @@ class StoreVisitController extends Controller
                     'store_visit_id'       => $visit->id,
                     'pic_name'             => $request->pic_name,
                     'activities'          => $request->activities,
-                    'stock_percentage'    => $request->stock_percentage,
+                    'stock_percentage'    => $stockPercentage,
                     'stock_pcs'           => $request->stock_pcs,
                     'notes'               => $request->notes,
                     'photos'              => $photoPaths,

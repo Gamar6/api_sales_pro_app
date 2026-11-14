@@ -31,20 +31,12 @@ defineProps({
             class="relative mx-auto flex min-h-screen w-full max-w-7xl flex-col px-6 sm:px-8 lg:px-12"
         >
             <!-- Header -->
-<<<<<<< HEAD
-            <header class="flex items-center justify-between py-6 sm:py-8">
-=======
             <header class="flex items-center justify-between py-7 sm:py-8">
->>>>>>> 1f49f4b47bdaf6d57aa5573ddcf26bdaf03fc16f
                 <div class="flex items-center">
                     <img
                         src="/images/logo.png"
                         alt="Fiva Sales App"
-<<<<<<< HEAD
                         class="h-16 w-auto object-contain sm:h-24"
-=======
-                        class="h-9 w-auto object-contain sm:h-10"
->>>>>>> 1f49f4b47bdaf6d57aa5573ddcf26bdaf03fc16f
                     />
                 </div>
 

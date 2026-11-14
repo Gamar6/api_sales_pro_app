@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Models\VisitReport;
 use Carbon\CarbonImmutable;
 use App\Services\CloudinaryService;
+use App\Services\Odoo\OdooStoreService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -19,8 +20,11 @@ use Throwable;
 
 class VisitReportController extends Controller
 {
-    public function store(Request $request, CloudinaryService $cloudinary): JsonResponse
-    {
+    public function store(
+        Request $request,
+        CloudinaryService $cloudinary,
+        OdooStoreService $odooStore
+    ): JsonResponse {
         $storeType = $request->input('store_type');
         $request->merge([
             'idempotency_key' => $request->header(
@@ -91,6 +95,17 @@ class VisitReportController extends Controller
             }
         }
 
+        $stockPercentage = $validated['stock_percentage'] ?? null;
+        if (isset($validated['stock_pcs'])) {
+            $stockPercentage = null;
+            if ($validated['store_type'] === 'regular') {
+                $stockPercentage = $odooStore->calculateStockPercentage(
+                    (int) $validated['store_id'],
+                    (int) $validated['stock_pcs']
+                );
+            }
+        }
+
         $uploadedPhotos = [];
         $photoUrls = [];
         $checkInPhoto = $request->file('check_in_photo');
@@ -148,6 +163,7 @@ class VisitReportController extends Controller
                 $checkInLatitude,
                 $checkInLongitude,
                 $salesAccuracy,
+                $stockPercentage,
                 $idempotencyKey,
                 $idempotencyHash
             ): array {
@@ -214,7 +230,7 @@ class VisitReportController extends Controller
                         'store_visit_id' => $storeVisit?->id,
                         'pic_name' => $validated['pic_name'] ?? null,
                         'activities' => $validated['activities'] ?? null,
-                        'stock_percentage' => $validated['stock_percentage'] ?? null,
+                        'stock_percentage' => $stockPercentage,
                         'stock_pcs' => $validated['stock_pcs'] ?? null,
                         'notes' => $validated['notes'] ?? null,
                         'check_in_photo' => $photoUrl,
