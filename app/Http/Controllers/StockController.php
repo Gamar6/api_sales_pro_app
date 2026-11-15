@@ -25,6 +25,12 @@ class StockController extends Controller
 
             $qty = (float) ($item['raw_qty'] ?? 0);
 
+            $item['title'] = trim((string) preg_replace(
+                '/^\s*\[PRODUK JADI\]\s*/i',
+                '',
+                (string) ($item['title'] ?? '')
+            ));
+
             // Format level stok
             $item['level'] = number_format($qty, 0, ',', '.');
 
