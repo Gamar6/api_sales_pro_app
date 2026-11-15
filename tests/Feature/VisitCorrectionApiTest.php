@@ -113,12 +113,22 @@ class VisitCorrectionApiTest extends TestCase
         ])->assertCreated()
             ->assertHeader('Idempotent-Replayed', 'true');
 
+        $this->mock(OdooClient::class, function ($mock): void {
+            $mock->shouldReceive('executeKw')
+                ->times(3)
+                ->andReturn(
+                    [['id' => 601]],
+                    [['product_uom_qty' => 90, 'product_uom' => [1, 'Units']]],
+                    [['id' => 501, 'name' => 'Toko Uji']]
+                );
+        });
+
         $this->postJson("/api/store-visits/{$visit->id}/corrections", [
             'stock_pcs' => 45,
             'reason' => 'Jumlah stok dikoreksi.',
         ], ['Idempotency-Key' => 'correction-multiple-002'])
             ->assertCreated()
-            ->assertJsonPath('data.effective_data.stock_percentage', 70)
+            ->assertJsonPath('data.effective_data.stock_percentage', 50)
             ->assertJsonPath('data.effective_data.stock_pcs', 45);
 
         $this->postJson("/api/store-visits/{$visit->id}/corrections", [
@@ -130,20 +140,15 @@ class VisitCorrectionApiTest extends TestCase
         $this->getJson("/api/store-visits/{$visit->id}/corrections")
             ->assertOk()
             ->assertJsonPath('data.original_data.stock_percentage', 80)
-            ->assertJsonPath('data.effective_data.stock_percentage', 70)
+            ->assertJsonPath('data.effective_data.stock_percentage', 50)
             ->assertJsonPath('data.effective_data.stock_pcs', 45)
             ->assertJsonCount(2, 'data.corrections');
 
-        $this->mock(OdooClient::class, function ($mock): void {
-            $mock->shouldReceive('executeKw')
-                ->once()
-                ->andReturn([['id' => 501, 'name' => 'Toko Uji']]);
-        });
         $this->getJson('/api/store-visits/history')
             ->assertOk()
             ->assertJsonPath('data.0.report.stock_percentage', 80)
             ->assertJsonPath('data.0.report_original.stock_percentage', 80)
-            ->assertJsonPath('data.0.report_effective.stock_percentage', 70)
+            ->assertJsonPath('data.0.report_effective.stock_percentage', 50)
             ->assertJsonPath('data.0.report_effective.stock_pcs', 45);
 
         $this->assertSame(2, VisitCorrection::query()->count());
@@ -155,6 +160,47 @@ class VisitCorrectionApiTest extends TestCase
             'stock_percentage' => 80,
             'stock_pcs' => 25,
         ]);
+    }
+
+    public function test_changing_stock_pcs_clears_the_percentage_when_odoo_has_no_order_basis(): void
+    {
+        $sales = User::factory()->create(['status' => 'active']);
+        $visit = $this->completedVisit($sales);
+        Sanctum::actingAs($sales);
+
+        $this->mock(OdooClient::class, function ($mock): void {
+            $mock->shouldReceive('executeKw')
+                ->once()
+                ->andReturn([]);
+        });
+
+        $this->postJson("/api/store-visits/{$visit->id}/corrections", [
+            'stock_pcs' => 40,
+            'reason' => 'Jumlah stok dikoreksi.',
+        ], ['Idempotency-Key' => 'correction-no-order-basis'])
+            ->assertCreated()
+            ->assertJsonPath('data.effective_data.stock_pcs', 40)
+            ->assertJsonPath('data.effective_data.stock_percentage', null);
+    }
+
+    public function test_manual_percentage_correction_is_kept_when_stock_pcs_is_unchanged(): void
+    {
+        $sales = User::factory()->create(['status' => 'active']);
+        $visit = $this->completedVisit($sales);
+        Sanctum::actingAs($sales);
+
+        $this->mock(OdooClient::class, function ($mock): void {
+            $mock->shouldNotReceive('executeKw');
+        });
+
+        $this->postJson("/api/store-visits/{$visit->id}/corrections", [
+            'stock_pcs' => 25,
+            'stock_percentage' => 65,
+            'reason' => 'Persentase dikoreksi manual.',
+        ], ['Idempotency-Key' => 'correction-manual-percentage'])
+            ->assertCreated()
+            ->assertJsonPath('data.effective_data.stock_pcs', 25)
+            ->assertJsonPath('data.effective_data.stock_percentage', 65);
     }
 
     public function test_correction_requires_authentication_and_a_reason_and_idempotency_key(): void

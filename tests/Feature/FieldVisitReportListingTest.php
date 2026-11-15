@@ -85,4 +85,78 @@ class FieldVisitReportListingTest extends TestCase
                 ->where('visits.data.0.report.activities.0', 'Pengecekan toko')
                 ->where('visits.data.0.sales.name', $sales->name));
     }
+
+    public function test_field_report_uses_visited_at_as_one_wib_time_without_a_duration(): void
+    {
+        $sales = User::factory()->create(['status' => 'active']);
+        $fieldStore = FieldStore::create([
+            'user_id' => $sales->id,
+            'store_name' => 'Toko Baru Bertimestamp',
+            'address' => 'Jl. Contoh No. 10',
+            'latitude' => -6.2,
+            'longitude' => 106.9,
+            'photo_url' => 'https://res.cloudinary.com/test/store.jpg',
+        ]);
+        $fieldStore->forceFill([
+            'created_at' => '2026-11-15 09:00:00',
+        ])->save();
+        Sanctum::actingAs($sales);
+
+        $this->postJson('/api/v1/visit-reports', [
+            'store_type' => 'field',
+            'store_id' => $fieldStore->id,
+            'check_in_lat' => -6.2,
+            'check_in_lng' => 106.9,
+            'visited_at' => '2026-11-15T15:44:55Z',
+        ])->assertCreated();
+
+        $this->mock(OdooService::class, function ($mock): void {
+            $mock->shouldNotReceive('getCompleteStoreData');
+        });
+
+        $this->actingAs($sales, 'web')
+            ->get('/visit-reports?quick_filter=all')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('visits.data.0.store_type', 'field')
+                ->where('visits.data.0.visited_at', '22:44:55')
+                ->where('visits.data.0.check_in_at', null)
+                ->where('visits.data.0.check_out_at', null)
+                ->where('visits.data.0.duration_seconds', null)
+                ->where('statistics.average_duration', '0m 00s'));
+    }
+
+    public function test_regular_visit_report_keeps_its_check_in_check_out_and_duration(): void
+    {
+        $sales = User::factory()->create(['status' => 'active']);
+        $partnerId = 987654;
+        StoreVisit::create([
+            'store_type' => 'regular',
+            'field_store_id' => null,
+            'odoo_partner_id' => $partnerId,
+            'sales_id' => $sales->id,
+            'visit_date' => '2026-11-15',
+            'status' => 'COMPLETED',
+            'active_store_key' => null,
+            'active_sales_key' => null,
+            'check_in_at' => '2026-11-15 15:44:48',
+            'check_out_at' => '2026-11-15 22:44:55',
+        ]);
+        $this->mock(OdooService::class, function ($mock) use ($partnerId): void {
+            $mock->shouldReceive('getCompleteStoreData')
+                ->twice()
+                ->with([$partnerId])
+                ->andReturn([]);
+        });
+
+        $this->actingAs($sales, 'web')
+            ->get('/visit-reports?quick_filter=all')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('visits.data.0.store_type', 'regular')
+                ->where('visits.data.0.check_in_at', '15:44:48')
+                ->where('visits.data.0.check_out_at', '22:44:55')
+                ->where('visits.data.0.duration_seconds', 25207)
+                ->where('statistics.average_duration', '420m 07s'));
+    }
 }

@@ -6,12 +6,15 @@ use App\Models\StoreVisit;
 use App\Models\User;
 use App\Models\VisitCorrection;
 use App\Models\VisitReport;
+use App\Services\Odoo\OdooStoreService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class VisitCorrectionService
 {
+    public function __construct(protected OdooStoreService $odooStore) {}
+
     public function submit(
         User $user,
         int $visitId,
@@ -81,6 +84,22 @@ class VisitCorrectionService
             );
             $correctionData = array_replace($previousData, $changes);
 
+            if ($this->stockPcsChanged($previousData, $validated)) {
+                $correctionData['stock_percentage'] = null;
+
+                if (
+                    ($visit->store_type ?? 'regular') !== 'field'
+                    && $visit->odoo_partner_id !== null
+                    && $validated['stock_pcs'] !== null
+                ) {
+                    $correctionData['stock_percentage'] =
+                        $this->odooStore->calculateStockPercentage(
+                            (int) $visit->odoo_partner_id,
+                            (int) $validated['stock_pcs']
+                        );
+                }
+            }
+
             $correction = VisitCorrection::create([
                 'store_visit_id' => $visit->id,
                 'visit_report_id' => $report->id,
@@ -117,6 +136,22 @@ class VisitCorrectionService
         return $visit->status === 'COMPLETED'
             && $deadline !== null
             && CarbonImmutable::now(config('app.timezone'))->lte($deadline);
+    }
+
+    private function stockPcsChanged(array $previousData, array $validated): bool
+    {
+        if (! array_key_exists('stock_pcs', $validated)) {
+            return false;
+        }
+
+        $previousStockPcs = $previousData['stock_pcs'] ?? null;
+        $correctedStockPcs = $validated['stock_pcs'];
+
+        if ($previousStockPcs === null || $correctedStockPcs === null) {
+            return $previousStockPcs !== $correctedStockPcs;
+        }
+
+        return (int) $previousStockPcs !== (int) $correctedStockPcs;
     }
 
     private function requestHash(int $visitId, array $validated): string

@@ -14,6 +14,10 @@ const props = defineProps({
 });
 
 const duration = computed(() => {
+    if (props.visit.store_type === "field") {
+        return "N/A";
+    }
+
     const seconds = props.visit.duration_seconds;
 
     if (!seconds) {
@@ -213,24 +217,29 @@ const formatDistance = (distance) => {
         <td class="py-space-sm px-space-base">
             <div class="flex flex-col font-code-metric">
                 <div class="flex items-center gap-1 text-on-surface">
-                    <span>
-                        {{ visit.check_in_at ?? "-" }}
+                    <span v-if="visit.store_type === 'field'">
+                        {{ visit.visited_at ?? "-" }}
                     </span>
+                    <template v-else>
+                        <span>
+                            {{ visit.check_in_at ?? "-" }}
+                        </span>
 
-                    <span class="text-secondary"> → </span>
+                        <span class="text-secondary"> → </span>
 
-                    <span v-if="visit.check_out_at">
-                        {{ visit.check_out_at }}
-                    </span>
+                        <span v-if="visit.check_out_at">
+                            {{ visit.check_out_at }}
+                        </span>
 
-                    <span
-                        v-else-if="visit.status === 'IN_VISIT'"
-                        class="text-tertiary-container font-semibold"
-                    >
-                        Active Now
-                    </span>
+                        <span
+                            v-else-if="visit.status === 'IN_VISIT'"
+                            class="text-tertiary-container font-semibold"
+                        >
+                            Active Now
+                        </span>
 
-                    <span v-else> - </span>
+                        <span v-else> - </span>
+                    </template>
                 </div>
 
                 <span class="text-[11px] text-secondary">

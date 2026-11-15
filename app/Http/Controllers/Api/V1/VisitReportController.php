@@ -72,7 +72,8 @@ class VisitReportController extends Controller
             ], 422);
         }
 
-        $visitedAt = CarbonImmutable::parse($validated['visited_at']);
+        $visitedAt = CarbonImmutable::parse($validated['visited_at'])
+            ->setTimezone(config('app.timezone'));
         $checkInLatitude = (float) $validated['check_in_lat'];
         $checkInLongitude = (float) $validated['check_in_lng'];
         $salesAccuracy = isset($validated['sales_accuracy'])
@@ -214,7 +215,9 @@ class VisitReportController extends Controller
                         'field_store_id' => $fieldStore->id,
                         'odoo_partner_id' => null,
                         'sales_id' => $userId,
-                        'visit_date' => $visitedAt->toDateString(),
+                        'visit_date' => $visitedAt
+                            ->setTimezone('Asia/Jakarta')
+                            ->toDateString(),
                         'status' => 'COMPLETED',
                         'active_store_key' => null,
                         'active_sales_key' => null,

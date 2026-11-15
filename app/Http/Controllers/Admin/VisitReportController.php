@@ -169,7 +169,8 @@ class VisitReportController extends Controller
 
         $averageDurationSeconds = $allVisits
             ->filter(function ($visit) {
-                return $visit->check_in_at
+                return $visit->store_type !== 'field'
+                    && $visit->check_in_at
                     && $visit->check_out_at;
             })
             ->map(function ($visit) {
@@ -235,12 +236,14 @@ class VisitReportController extends Controller
 
         $visitData = $paginatedVisits
             ->map(function ($visit) use ($partnerMap) {
+                $isFieldStore = ($visit->store_type ?? 'regular') === 'field';
                 $durationSeconds = null;
                 $originalReportData = $visit->report?->originalData();
                 $effectiveReportData = $visit->report?->effectiveData();
 
                 if (
-                    $visit->check_in_at
+                    !$isFieldStore
+                    && $visit->check_in_at
                     && $visit->check_out_at
                 ) {
                     $durationSeconds = $visit->check_in_at
@@ -249,7 +252,6 @@ class VisitReportController extends Controller
                         );
                 }
 
-                $isFieldStore = ($visit->store_type ?? 'regular') === 'field';
                 $partner = $isFieldStore
                     ? [
                         'id' => $visit->fieldStore?->id,
@@ -283,16 +285,23 @@ class VisitReportController extends Controller
                     'activities' =>
                         $effectiveReportData['activities'] ?? [],
 
+                    'visited_at' => $isFieldStore && $visit->report?->visited_at
+                        ? $visit->report->visited_at
+                            ->copy()
+                            ->setTimezone('Asia/Jakarta')
+                            ->format('H:i:s')
+                        : null,
+
                     'status' =>
                         $visit->status,
 
                     'check_in_at' =>
-                        $visit->check_in_at
+                        !$isFieldStore && $visit->check_in_at
                             ? $visit->check_in_at->format('H:i:s')
                             : null,
 
                     'check_out_at' =>
-                        $visit->check_out_at
+                        !$isFieldStore && $visit->check_out_at
                             ? $visit->check_out_at->format('H:i:s')
                             : null,
 
@@ -598,8 +607,9 @@ class VisitReportController extends Controller
                 $duration = '-';
 
                 if (
-                    $visit->check_in_at &&
-                    $visit->check_out_at
+                    !$isFieldStore
+                    && $visit->check_in_at
+                    && $visit->check_out_at
                 ) {
                     $seconds = $visit->check_in_at
                         ->diffInSeconds(
@@ -618,6 +628,15 @@ class VisitReportController extends Controller
 
                 $effectiveReportData = $visit->report?->effectiveData() ?? [];
                 $activities = $effectiveReportData['activities'] ?? [];
+                $checkIn = $isFieldStore
+                    ? $visit->report?->visited_at
+                        ?->copy()
+                        ->setTimezone('Asia/Jakarta')
+                        ->format('H:i:s')
+                    : $visit->check_in_at?->format('H:i:s');
+                $checkOut = $isFieldStore
+                    ? null
+                    : $visit->check_out_at?->format('H:i:s');
 
                 if (is_array($activities)) {
                     $activities = implode(
@@ -640,13 +659,9 @@ class VisitReportController extends Controller
 
                     'status' => $visit->status,
 
-                    'check_in' => $visit->check_in_at
-                        ? $visit->check_in_at->format('H:i:s')
-                        : null,
+                    'check_in' => $checkIn,
 
-                    'check_out' => $visit->check_out_at
-                        ? $visit->check_out_at->format('H:i:s')
-                        : null,
+                    'check_out' => $checkOut,
 
                     'duration' => $duration,
 

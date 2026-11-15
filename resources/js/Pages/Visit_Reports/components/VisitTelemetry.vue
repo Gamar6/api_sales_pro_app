@@ -55,16 +55,26 @@ defineProps({
             <!-- Check In -->
 
             <div class="flex flex-col">
-                <span class="text-[11px] text-secondary"> Check-in </span>
+                <span class="text-[11px] text-secondary">
+                    {{
+                        visit.store_type === "field"
+                            ? "Report Time"
+                            : "Check-in"
+                    }}
+                </span>
 
                 <span class="font-code-metric font-bold text-primary">
-                    {{ visit.check_in_at ?? "-" }}
+                    {{
+                        visit.store_type === "field"
+                            ? visit.visited_at ?? "-"
+                            : visit.check_in_at ?? "-"
+                    }}
                 </span>
             </div>
 
             <!-- Check Out -->
 
-            <div class="flex flex-col">
+            <div v-if="visit.store_type !== 'field'" class="flex flex-col">
                 <span class="text-[11px] text-secondary"> Check-out </span>
 
                 <span class="font-code-metric font-bold text-primary">
@@ -74,7 +84,7 @@ defineProps({
 
             <!-- Duration -->
 
-            <div class="flex flex-col">
+            <div v-if="visit.store_type !== 'field'" class="flex flex-col">
                 <span class="text-[11px] text-secondary"> Total Duration </span>
 
                 <span class="font-code-metric font-bold text-primary">

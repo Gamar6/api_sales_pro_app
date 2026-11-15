@@ -14,6 +14,10 @@ const props = defineProps({
 defineEmits(["close"]);
 
 const duration = computed(() => {
+    if (props.visit.store_type === "field") {
+        return "N/A";
+    }
+
     const seconds = props.visit.duration_seconds;
 
     if (!seconds) {
@@ -160,7 +164,12 @@ const storeAddress = computed(() => {
 
                     <span>•</span>
 
-                    <span> Check-in {{ visit.check_in_at ?? "-" }} </span>
+                    <span v-if="visit.store_type === 'field'">
+                        Report time {{ visit.visited_at ?? "-" }}
+                    </span>
+                    <span v-else>
+                        Check-in {{ visit.check_in_at ?? "-" }}
+                    </span>
                 </div>
             </div>
 
