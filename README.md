@@ -134,6 +134,111 @@ Critical operations are protected using database transactions and row-level lock
 
 ---
 
+
+### 🏪 Field Store Reporting Improvements
+
+The backend supports reporting for Field Stores registered directly by sales representatives.
+
+Field Store reporting is handled separately from regular-store visit reporting.
+
+Key characteristics:
+
+- Field Stores are stored in the local application database.
+- Field Store registration does not require an Odoo partner.
+- Visit reports can be submitted using the newly persisted Field Store ID.
+- Field Store reports retain their own visit timestamp through `visited_at`.
+- The Admin Visit Reports page uses `visited_at` as the report timestamp.
+- Regular-store check-in/check-out duration calculations are not applied to Field Store reports.
+
+This ensures that Field Store activities can be included in operational reporting without requiring an existing Odoo customer record.
+
+### 📦 Product Name Normalization
+
+The stock API normalizes product names retrieved from Odoo.
+
+The leading `[PRODUK JADI]` prefix is removed from product titles before they are returned in the API response.
+
+This prevents internal ERP product categorization labels from appearing in the mobile application's stock interface.
+
+---
+
+### ✏️ Visit Correction & Audit Trail
+
+The backend provides a Visit Correction mechanism that allows sales representatives to correct submitted visit reports after a visit has been completed.
+
+The correction workflow is handled by dedicated API endpoints:
+
+```http
+POST /api/store-visits/{visit}/corrections
+GET  /api/store-visits/{visit}/corrections
+```
+
+#### Correction Rules
+
+The backend enforces the following business rules:
+
+- Only the sales representative who owns the visit can submit corrections.
+- Corrections are only available for completed visits.
+- A visit must have an existing report.
+- Corrections are allowed within 12 hours after `check_out_at`.
+- The correction reason is mandatory.
+- At least one supported field must be changed.
+- Every correction request must include an `Idempotency-Key`.
+
+The correction deadline is validated using backend server time. A correction submitted after the allowed window is rejected.
+
+#### Supported Fields
+
+The following report fields can be corrected:
+
+| Field | Description |
+|---|---|
+| `pic_name` | Store contact person |
+| `activities` | Visit activities |
+| `stock_percentage` | Stock percentage |
+| `stock_pcs` | Stock quantity in pieces |
+| `notes` | Additional visit notes |
+
+#### Audit Trail
+
+Corrections are automatically approved and stored in the `visit_corrections` table.
+
+The system preserves:
+
+- Original report data.
+- Previous effective values.
+- Updated values.
+- Correction reason.
+- Correction history.
+
+The original `visit_reports` record is not overwritten.
+
+Each correction stores previous and effective data snapshots. Partial corrections retain the previously effective values for fields that were not modified.
+
+The latest approved correction determines the effective report data.
+
+#### Idempotency Protection
+
+The backend uses `Idempotency-Key` to prevent duplicate correction submissions.
+
+- Repeating the same key with the same payload is handled idempotently.
+- Reusing the same key with a different payload returns HTTP 409.
+
+#### Correction History Response
+
+The correction history endpoint provides:
+
+- `correction_window`
+- `original_data`
+- `effective_data`
+- Correction history records
+
+The visit history API also exposes original and effective report representations.
+
+The Admin Visit Reports interface provides correction audit information and corrected-visit counts.
+
+---
+
 ### 📍 GPS & Radius Verification
 
 Visit reports require location data from the sales representative.
@@ -250,6 +355,65 @@ The integration is used for retrieving information such as:
 * Sales-related data
 
 The Odoo integration is separated from the controllers through dedicated service classes.
+
+---
+
+
+### 📊 Odoo-Based Stock Percentage Calculation
+
+The backend calculates the stock percentage for regular-store visit reports using the store's latest eligible sales order retrieved from Odoo.
+
+#### Order Selection
+
+The backend selects the latest sales order that meets the following conditions:
+
+- Order state is `sale` or `done`.
+- The order belongs to the corresponding store.
+- Orders are sorted by `date_order` in descending order.
+- Order ID is used as a secondary descending sort criterion.
+
+#### Stock Calculation
+
+The calculation uses the total piece quantity from the selected sales order.
+
+Formula:
+
+```text
+stock_percentage =
+    round(stock_pcs / latest_order_total_pcs * 100)
+```
+
+Where:
+
+- `stock_pcs` is the stock quantity entered by the sales representative.
+- `latest_order_total_pcs` is the total quantity of pieces in the latest eligible Odoo sales order.
+
+Supported piece units include:
+
+- `unit`
+- `units`
+- `pc`
+- `pcs`
+- `piece`
+- `pieces`
+
+#### Calculation Validation
+
+The percentage is left `null` when:
+
+- No eligible sales order exists.
+- The latest order has no order lines.
+- The total order quantity is zero.
+- An order line contains a negative or non-numeric quantity.
+- An unsupported or mixed unit is encountered.
+
+The entered stock quantity is retained even when percentage calculation cannot be performed.
+
+#### Field Store Compatibility
+
+Field Store reports do not use Odoo-based stock percentage calculation because newly registered field stores do not have an established Odoo sales order reference.
+
+For these reports, `stock_pcs` is retained without calculating `stock_percentage`.
 
 ---
 
@@ -777,6 +941,12 @@ The backend currently provides:
 * Excel reporting
 * User and role management
 * Python data processing pipeline
+* Visit Correction and audit trail
+* Odoo-based stock percentage calculation
+* Field Store reporting improvements
+* Product name normalization
+* Visit correction monitoring in Admin Dashboard
+
 
 ---
 
